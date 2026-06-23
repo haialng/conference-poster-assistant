@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>会议议程海报 & 串场工具 v1.0</title>
+    <title>会议议程海报 & 串场工具 v1.1</title>
     <style>
         :root {
             --primary-color: #0a3a6e;
@@ -133,6 +133,96 @@
             box-sizing: border-box;
             font-family: inherit;
         }
+        
+        .form-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Agenda Items */
+        .agenda-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .agenda-item {
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            cursor: grab;
+        }
+        
+        .agenda-item.dragging {
+            opacity: 0.5;
+        }
+
+        .agenda-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .agenda-icon {
+            margin-right: 10px;
+            font-size: 1.2rem;
+            cursor: grab;
+        }
+
+        .agenda-title-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-weight: bold;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+        
+        .agenda-title-input:focus {
+            outline: none;
+            border-bottom: 1px solid var(--primary-color);
+        }
+
+        .agenda-duration {
+            width: 50px;
+            margin-left: 10px;
+            padding: 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .agenda-time {
+            font-size: 0.8rem;
+            color: #888;
+            margin-left: 10px;
+            min-width: 90px;
+            text-align: right;
+        }
+
+        .agenda-delete {
+            background: transparent;
+            border: none;
+            color: #d32f2f;
+            cursor: pointer;
+            margin-left: 5px;
+        }
+
+        .add-agenda-btn {
+            width: 100%;
+            padding: 10px;
+            background-color: var(--bg-color);
+            border: 1px dashed #ccc;
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--mid-blue);
+            font-weight: bold;
+            margin-top: 10px;
+        }
 
         /* Right Panel */
         .right-panel {
@@ -202,6 +292,7 @@
             align-items: center;
             justify-content: center;
             color: white;
+            transition: all 0.3s;
         }
 
         .slide-canvas.poster-mode {
@@ -253,7 +344,6 @@
             cursor: pointer;
         }
 
-        /* Helpers */
         .hidden { display: none; }
     </style>
 </head>
@@ -261,9 +351,9 @@
 
     <!-- Top Toolbar -->
     <div class="toolbar">
-        <div class="toolbar-title">📋 会议议程海报 & 串场工具 v1.0</div>
+        <div class="toolbar-title">📋 会议议程海报 & 串场工具 v1.1</div>
         <div class="toolbar-actions">
-            <span id="save-status" style="font-size: 0.9rem; margin-right: 15px; opacity: 0.8;">💾 已保存 14:23</span>
+            <span id="save-status" style="font-size: 0.9rem; margin-right: 15px; opacity: 0.8;"></span>
             <button onclick="alert('AI设置暂未实现')">⚙️ AI设置</button>
             <button onclick="alert('关于信息')">ℹ️ 关于</button>
             <button onclick="alert('导出功能菜单')">📤 导出 ▼</button>
@@ -286,45 +376,54 @@
             <div id="tab-basic" class="tab-content active">
                 <div class="form-group">
                     <label>会议名称</label>
-                    <input type="text" id="input-title" class="form-control" value="精诚医途" oninput="syncToSlide()">
+                    <input type="text" id="input-title" class="form-control" oninput="updateMeta('title', this.value)">
                 </div>
                 <div class="form-group">
                     <label>副标题</label>
-                    <input type="text" id="input-subtitle" class="form-control" value="临床综合能力建设项目" oninput="syncToSlide()">
+                    <input type="text" id="input-subtitle" class="form-control" oninput="updateMeta('subtitle', this.value)">
                 </div>
-                <div class="form-group">
-                    <label>会议主题</label>
-                    <input type="text" class="form-control" placeholder="例如：肺癌">
+                <div class="form-row">
+                    <div class="form-group" style="flex:1;">
+                        <label>会议日期</label>
+                        <input type="date" id="input-date" class="form-control" oninput="updateMeta('date', this.value)">
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label>开始时间</label>
+                        <input type="time" id="input-time" class="form-control" oninput="updateMeta('startTime', this.value)">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>会议日期</label>
-                    <input type="date" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label>开始时间</label>
-                    <input type="time" class="form-control" value="19:00">
-                </div>
-                <p style="color:#888; font-size:0.8rem;">（更多字段在完整版中实现）</p>
             </div>
 
             <!-- Tab: Agenda -->
             <div id="tab-agenda" class="tab-content">
-                <h3>议程安排</h3>
-                <p style="color:#888; font-size:0.8rem;">（拖拽排序、时间自动计算等功能在完整版中实现）</p>
-                <button style="width:100%; padding:10px; margin-top:10px;">+ 添加环节</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+                    <h3 style="margin:0;">议程安排</h3>
+                    <span style="font-size:0.8rem; color:#888;">(拖拽可排序)</span>
+                </div>
+                
+                <ul id="agenda-list" class="agenda-list">
+                    <!-- Agenda items will be rendered here -->
+                </ul>
+                
+                <div style="margin-top: 10px; display: flex; gap: 5px; flex-wrap: wrap;" id="add-agenda-buttons">
+                    <button class="add-agenda-btn" onclick="addAgendaItem('opening')">🎤 致辞</button>
+                    <button class="add-agenda-btn" onclick="addAgendaItem('talk')">📖 报告</button>
+                    <button class="add-agenda-btn" onclick="addAgendaItem('discussion')">💬 讨论</button>
+                    <button class="add-agenda-btn" onclick="addAgendaItem('break')">☕ 休息</button>
+                </div>
             </div>
 
             <!-- Tab: People -->
             <div id="tab-people" class="tab-content">
                 <h3>人员管理</h3>
-                <p style="color:#888; font-size:0.8rem;">（主席、讲者、主持、嘉宾管理，拼音排序在完整版中实现）</p>
+                <p style="color:#888; font-size:0.8rem;">（主席、讲者、主持、嘉宾管理，拼音排序在 Phase 2 实现）</p>
                 <button style="width:100%; padding:10px; margin-top:10px;">+ 添加人员</button>
             </div>
 
             <!-- Tab: Template -->
             <div id="tab-template" class="tab-content">
                 <h3>模板设置</h3>
-                <p style="color:#888; font-size:0.8rem;">（模板切换、颜色自定义等功能在完整版中实现）</p>
+                <p style="color:#888; font-size:0.8rem;">（模板切换、颜色自定义等功能在后续版本实现）</p>
             </div>
         </div>
 
@@ -346,12 +445,12 @@
                 <div id="slide-canvas" class="slide-canvas poster-mode">
                     <!-- Poster Content (Dynamic) -->
                     <div style="text-align: center; margin-bottom: 20px;">
-                        <h1 class="editable-text" contenteditable="true" id="canvas-title" onblur="syncToForm()" style="margin:0; font-family: var(--font-serif); font-size: 52px; letter-spacing: 6px;">精诚医途</h1>
-                        <div class="editable-text" contenteditable="true" id="canvas-subtitle" onblur="syncToForm()" style="margin-top:10px; font-size: 14px; letter-spacing: 4px;">临床综合能力建设项目</div>
+                        <h1 class="editable-text" contenteditable="true" id="canvas-title" onblur="syncToForm('title', this.innerText)" style="margin:0; font-family: var(--font-serif); font-size: 52px; letter-spacing: 6px;"></h1>
+                        <div class="editable-text" contenteditable="true" id="canvas-subtitle" onblur="syncToForm('subtitle', this.innerText)" style="margin-top:10px; font-size: 14px; letter-spacing: 4px;"></div>
                     </div>
                     
                     <div style="margin-top: 40px; padding: 10px 30px; background: rgba(255,255,255,0.8); border-radius: 10px; width: 80%;">
-                        <p style="text-align:center; color:#888;">(海报其他元素如人员、日程表在此渲染)</p>
+                        <div id="poster-agenda-preview" style="font-size: 14px; margin-top: 15px; color:#333; text-align: left;"></div>
                     </div>
                 </div>
 
@@ -366,84 +465,40 @@
     </div>
 
     <script>
-        // Basic Interaction Logic
-        let currentSlide = 0;
-        const totalSlides = 4;
+        // --- State Management ---
+        const DEFAULT_STATE = {
+            meta: {
+                title: '精诚医途',
+                subtitle: '临床综合能力建设项目',
+                date: '2026-04-09',
+                startTime: '19:00'
+            },
+            agenda: [
+                { id: generateId(), type: 'opening', title: '主席致辞', duration: 10 },
+                { id: generateId(), type: 'talk', title: '学术报告', duration: 30 },
+                { id: generateId(), type: 'discussion', title: '讨论环节', duration: 30 },
+                { id: generateId(), type: 'closing', title: '主席总结', duration: 10 }
+            ],
+            people: [],
+            template: 'blue'
+        };
 
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            
-            event.target.classList.add('active');
-            document.getElementById(tabId).classList.add('active');
+        let state = JSON.parse(localStorage.getItem('conf_pro')) || DEFAULT_STATE;
+        let saveTimeout = null;
+
+        function generateId() {
+            return Math.random().toString(36).substr(2, 9);
         }
 
-        function switchSlide(index) {
-            currentSlide = index;
-            
-            // Update thumbnails
-            const thumbs = document.querySelectorAll('.thumbnail');
-            thumbs.forEach((t, i) => {
-                if(i === index) t.classList.add('active');
-                else t.classList.remove('active');
-            });
-
-            // Update Canvas Mode (0 is poster)
-            const canvas = document.getElementById('slide-canvas');
-            if (index === 0) {
-                canvas.classList.add('poster-mode');
-                canvas.innerHTML = `
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <h1 class="editable-text" contenteditable="true" id="canvas-title" onblur="syncToForm()" style="margin:0; font-family: var(--font-serif); font-size: 52px; letter-spacing: 6px;">${document.getElementById('input-title').value}</h1>
-                        <div class="editable-text" contenteditable="true" id="canvas-subtitle" onblur="syncToForm()" style="margin-top:10px; font-size: 14px; letter-spacing: 4px;">${document.getElementById('input-subtitle').value}</div>
-                    </div>
-                    <div style="margin-top: 40px; padding: 10px 30px; background: rgba(255,255,255,0.8); border-radius: 10px; width: 80%;">
-                        <p style="text-align:center; color:#888;">(海报其他元素如人员、日程表在此渲染)</p>
-                    </div>
-                `;
-            } else {
-                canvas.classList.remove('poster-mode');
-                let content = '';
-                if(index === 1) content = `<h1 class="editable-text" contenteditable="true" style="font-family:var(--font-serif);">${document.getElementById('input-title').value}</h1><h3 class="editable-text" contenteditable="true" style="color:#bbdefb">${document.getElementById('input-subtitle').value}</h3>`;
-                else if(index === 2) content = `<h2>会议日程</h2><p>（日程表内容）</p>`;
-                else if(index === 3) content = `<h2>大会主持</h2><p>（主持人信息）</p>`;
-                
-                canvas.innerHTML = content;
-            }
-
-            document.getElementById('slide-indicator').innerText = `第 ${index + 1} / ${totalSlides} 张`;
-        }
-
-        function prevSlide() {
-            if (currentSlide > 0) switchSlide(currentSlide - 1);
-        }
-
-        function nextSlide() {
-            if (currentSlide < totalSlides - 1) switchSlide(currentSlide + 1);
-        }
-
-        // Two-way binding
-        function syncToSlide() {
-            const titleInput = document.getElementById('input-title').value;
-            const subtitleInput = document.getElementById('input-subtitle').value;
-            
-            const canvasTitle = document.getElementById('canvas-title');
-            if (canvasTitle) canvasTitle.innerText = titleInput;
-            
-            const canvasSubtitle = document.getElementById('canvas-subtitle');
-            if (canvasSubtitle) canvasSubtitle.innerText = subtitleInput;
-            
-            updateSaveStatus();
-        }
-
-        function syncToForm() {
-            const canvasTitle = document.getElementById('canvas-title');
-            if (canvasTitle) document.getElementById('input-title').value = canvasTitle.innerText;
-            
-            const canvasSubtitle = document.getElementById('canvas-subtitle');
-            if (canvasSubtitle) document.getElementById('input-subtitle').value = canvasSubtitle.innerText;
-            
-            updateSaveStatus();
+        function saveState() {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                // Before saving, ensure agenda times are calculated
+                calculateAgendaTimes();
+                localStorage.setItem('conf_pro', JSON.stringify(state));
+                updateSaveStatus();
+                renderPosterAgendaPreview(); // update right panel preview
+            }, 500);
         }
 
         function updateSaveStatus() {
@@ -454,8 +509,265 @@
             document.getElementById('save-status').innerText = '💾 已保存 ' + timeStr;
         }
 
-        // Initialize
-        updateSaveStatus();
+        // --- Meta Binding ---
+        function updateMeta(key, value) {
+            state.meta[key] = value;
+            if (key === 'startTime') {
+                calculateAgendaTimes();
+                renderAgendaList();
+            }
+            saveState();
+            syncToCanvas();
+        }
+
+        function syncToForm(key, value) {
+            if (key) {
+                state.meta[key] = value;
+                document.getElementById('input-' + key).value = value;
+                saveState();
+            }
+        }
+
+        function syncToCanvas() {
+            document.getElementById('canvas-title').innerText = state.meta.title;
+            document.getElementById('canvas-subtitle').innerText = state.meta.subtitle;
+        }
+
+        function initForms() {
+            document.getElementById('input-title').value = state.meta.title;
+            document.getElementById('input-subtitle').value = state.meta.subtitle;
+            document.getElementById('input-date').value = state.meta.date;
+            document.getElementById('input-time').value = state.meta.startTime;
+            syncToCanvas();
+        }
+
+        // --- Agenda Module ---
+        const TYPE_DEFAULTS = {
+            'opening': { icon: '🎤', defaultTitle: '主席致辞', defaultDuration: 10 },
+            'talk': { icon: '📖', defaultTitle: '学术报告', defaultDuration: 30 },
+            'case': { icon: '🏥', defaultTitle: '病例分享', defaultDuration: 30 },
+            'discussion': { icon: '💬', defaultTitle: '讨论环节', defaultDuration: 30 },
+            'break': { icon: '☕', defaultTitle: '休息', defaultDuration: 10 },
+            'closing': { icon: '🏁', defaultTitle: '主席总结', defaultDuration: 10 },
+            'custom': { icon: '⚙️', defaultTitle: '自定义环节', defaultDuration: 15 }
+        };
+
+        function calculateAgendaTimes() {
+            if (!state.agenda || state.agenda.length === 0) return;
+            
+            // Parse start time
+            let parts = state.meta.startTime.split(':');
+            let hours = parseInt(parts[0]) || 0;
+            let minutes = parseInt(parts[1]) || 0;
+            let currentTimeMinutes = hours * 60 + minutes;
+
+            state.agenda.forEach(item => {
+                const startH = Math.floor(currentTimeMinutes / 60).toString().padStart(2, '0');
+                const startM = (currentTimeMinutes % 60).toString().padStart(2, '0');
+                item.startTimeStr = `${startH}:${startM}`;
+                
+                currentTimeMinutes += Number(item.duration);
+                
+                const endH = Math.floor(currentTimeMinutes / 60).toString().padStart(2, '0');
+                const endM = (currentTimeMinutes % 60).toString().padStart(2, '0');
+                item.endTimeStr = `${endH}:${endM}`;
+            });
+        }
+
+        function renderAgendaList() {
+            const listEl = document.getElementById('agenda-list');
+            listEl.innerHTML = '';
+            
+            state.agenda.forEach((item, index) => {
+                const typeInfo = TYPE_DEFAULTS[item.type] || TYPE_DEFAULTS['custom'];
+                
+                const li = document.createElement('li');
+                li.className = 'agenda-item';
+                li.draggable = true;
+                li.dataset.index = index;
+                
+                // Drag events
+                li.addEventListener('dragstart', handleDragStart);
+                li.addEventListener('dragover', handleDragOver);
+                li.addEventListener('drop', handleDrop);
+                li.addEventListener('dragend', handleDragEnd);
+
+                li.innerHTML = `
+                    <div class="agenda-header">
+                        <span class="agenda-icon" title="拖拽排序">⠿ ${typeInfo.icon}</span>
+                        <input type="text" class="agenda-title-input" value="${item.title}" oninput="updateAgendaItem('${item.id}', 'title', this.value)">
+                        <input type="number" class="agenda-duration" value="${item.duration}" oninput="updateAgendaItem('${item.id}', 'duration', this.value)">
+                        <span style="font-size:0.8rem; margin-left:2px;">分</span>
+                        <span class="agenda-time">${item.startTimeStr || ''} - ${item.endTimeStr || ''}</span>
+                        <button class="agenda-delete" title="删除" onclick="deleteAgendaItem('${item.id}')">×</button>
+                    </div>
+                `;
+                listEl.appendChild(li);
+            });
+        }
+
+        function updateAgendaItem(id, field, value) {
+            const item = state.agenda.find(a => a.id === id);
+            if (item) {
+                if (field === 'duration') {
+                    item[field] = Math.max(1, parseInt(value) || 1);
+                    calculateAgendaTimes();
+                    renderAgendaList(); // re-render to show updated times
+                    renderPosterAgendaPreview(); // update preview
+                    if(currentSlide === 2) renderSlideAgendaPreview();
+                } else {
+                    item[field] = value;
+                    renderPosterAgendaPreview();
+                    if(currentSlide === 2) renderSlideAgendaPreview();
+                }
+                saveState();
+            }
+        }
+
+        function addAgendaItem(type) {
+            const typeInfo = TYPE_DEFAULTS[type];
+            state.agenda.push({
+                id: generateId(),
+                type: type,
+                title: typeInfo.defaultTitle,
+                duration: typeInfo.defaultDuration
+            });
+            calculateAgendaTimes();
+            renderAgendaList();
+            saveState();
+        }
+
+        function deleteAgendaItem(id) {
+            state.agenda = state.agenda.filter(a => a.id !== id);
+            calculateAgendaTimes();
+            renderAgendaList();
+            saveState();
+        }
+
+        // --- Drag and Drop Logic ---
+        let dragStartIndex = -1;
+
+        function handleDragStart(e) {
+            dragStartIndex = +this.dataset.index;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        }
+
+        function handleDrop(e) {
+            e.stopPropagation();
+            const dragEndIndex = +this.dataset.index;
+            
+            if (dragStartIndex !== dragEndIndex) {
+                // Swap array elements
+                const item = state.agenda.splice(dragStartIndex, 1)[0];
+                state.agenda.splice(dragEndIndex, 0, item);
+                
+                calculateAgendaTimes();
+                renderAgendaList();
+                saveState();
+            }
+            return false;
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+        }
+
+        // --- UI & Nav ---
+        let currentSlide = 0;
+        const totalSlides = 4;
+
+        function switchTab(tabId) {
+            const btns = document.querySelectorAll('.tab-btn');
+            for(let i=0; i<btns.length; i++) btns[i].classList.remove('active');
+            
+            const contents = document.querySelectorAll('.tab-content');
+            for(let i=0; i<contents.length; i++) contents[i].classList.remove('active');
+            
+            event.target.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        function switchSlide(index) {
+            currentSlide = index;
+            const canvas = document.getElementById('slide-canvas');
+            
+            const thumbs = document.querySelectorAll('.thumbnail');
+            for(let i=0; i<thumbs.length; i++) {
+                if(i === index) thumbs[i].classList.add('active');
+                else thumbs[i].classList.remove('active');
+            }
+
+            if (index === 0) {
+                canvas.classList.add('poster-mode');
+                canvas.innerHTML = `
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h1 class="editable-text" contenteditable="true" id="canvas-title" onblur="syncToForm('title', this.innerText)" style="margin:0; font-family: var(--font-serif); font-size: 52px; letter-spacing: 6px;">${state.meta.title}</h1>
+                        <div class="editable-text" contenteditable="true" id="canvas-subtitle" onblur="syncToForm('subtitle', this.innerText)" style="margin-top:10px; font-size: 14px; letter-spacing: 4px;">${state.meta.subtitle}</div>
+                    </div>
+                    <div style="margin-top: 40px; padding: 10px 30px; background: rgba(255,255,255,0.8); border-radius: 10px; width: 80%;">
+                        <div id="poster-agenda-preview" style="font-size: 14px; margin-top: 15px; color:#333; text-align: left;"></div>
+                    </div>
+                `;
+                renderPosterAgendaPreview();
+            } else {
+                canvas.classList.remove('poster-mode');
+                let content = '';
+                if(index === 1) content = `<h1 class="editable-text" contenteditable="true" style="font-family:var(--font-serif);">${state.meta.title}</h1><h3 class="editable-text" contenteditable="true" style="color:#bbdefb">${state.meta.subtitle}</h3>`;
+                else if(index === 2) content = `<h2>会议日程</h2><div id="slide-agenda-preview" style="font-size:16px; text-align:left; width: 80%;"></div>`;
+                else if(index === 3) content = `<h2>大会主持</h2><p>（主持人信息将在后续实现）</p>`;
+                
+                canvas.innerHTML = content;
+                if(index === 2) renderSlideAgendaPreview();
+            }
+
+            document.getElementById('slide-indicator').innerText = '第 ' + (index + 1) + ' / ' + totalSlides + ' 张';
+        }
+
+        function prevSlide() { if (currentSlide > 0) switchSlide(currentSlide - 1); }
+        function nextSlide() { if (currentSlide < totalSlides - 1) switchSlide(currentSlide + 1); }
+
+        function renderPosterAgendaPreview() {
+            const el = document.getElementById('poster-agenda-preview');
+            if (!el) return;
+            let html = '<div style="text-align:center; font-weight:bold; margin-bottom:10px; color:var(--primary-color);">会议日程</div>';
+            state.agenda.forEach(a => {
+                html += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(0,0,0,0.1); padding-bottom:4px;">
+                            <span style="font-weight:bold; color:var(--primary-color);">${a.startTimeStr} - ${a.endTimeStr}</span>
+                            <span>${a.title}</span>
+                         </div>`;
+            });
+            el.innerHTML = html;
+        }
+
+        function renderSlideAgendaPreview() {
+            const el = document.getElementById('slide-agenda-preview');
+            if (!el) return;
+            let html = '<table style="width:100%; border-collapse:collapse; color:white;">';
+            state.agenda.forEach(a => {
+                html += `<tr>
+                            <td style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.2); width:150px;">${a.startTimeStr} - ${a.endTimeStr}</td>
+                            <td style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.2);">${a.title}</td>
+                         </tr>`;
+            });
+            html += '</table>';
+            el.innerHTML = html;
+        }
+
+        // --- Bootstrap ---
+        window.onload = () => {
+            initForms();
+            calculateAgendaTimes();
+            renderAgendaList();
+            updateSaveStatus();
+            switchSlide(0);
+        };
     </script>
 </body>
 </html>
