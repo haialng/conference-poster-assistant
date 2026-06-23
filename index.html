@@ -371,11 +371,13 @@
 
     <!-- Top Toolbar -->
     <div class="toolbar">
-        <div class="toolbar-title">📋 会议议程海报 & 串场工具 v1.2</div>
+        <div class="toolbar-title">📋 会议议程海报 & 串场工具 v2.0</div>
         <div class="toolbar-actions">
             <span id="save-status" style="font-size: 0.9rem; margin-right: 15px; opacity: 0.8;"></span>
-            <button onclick="openAIModal()">⚙️ AI设置</button>
-            <button onclick="exportToPPT()">📤 导出为 PPT</button>
+            <button onclick="openAIParseModal()" style="background: linear-gradient(135deg, #ab47bc, #7b1fa2); border: none; color: white; font-weight: bold;">🔮 AI 智能一键解析</button>
+            <button onclick="openAIModal()">⚙️ AI 设置</button>
+            <button onclick="exportPosterPPT(event)" style="background: linear-gradient(135deg, #1e88e5, #1565c0); border: none; color: white; font-weight: bold;">🎨 导出海报 (PPT)</button>
+            <button onclick="exportSlidesPPT(event)" style="background: linear-gradient(135deg, #43a047, #2e7d32); border: none; color: white; font-weight: bold;">📽️ 导出串场 (PPT)</button>
         </div>
     </div>
 
@@ -436,7 +438,10 @@
             <div id="tab-people" class="tab-content">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
                     <h3 style="margin:0;">人员管理</h3>
-                    <button onclick="openPersonModal()" style="padding:4px 8px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer;">+ 添加人员</button>
+                    <div style="display:flex; gap:5px;">
+                        <button onclick="openBatchPeopleModal()" style="padding:4px 8px; background:var(--mid-blue); color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.8rem;">+ 批量导入</button>
+                        <button onclick="openPersonModal()" style="padding:4px 8px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.8rem;">+ 添加单个</button>
+                    </div>
                 </div>
                 <div id="people-list-container">
                     <!-- People groups rendered here -->
@@ -447,7 +452,7 @@
             <div id="tab-template" class="tab-content">
                 <h3 style="margin-top:0;">配色方案</h3>
                 <p style="color:#888; font-size:0.8rem; margin-bottom: 20px;">选择一个契合会议主题的配色方案：</p>
-                <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; flex-direction:column; gap:10px; margin-bottom: 20px;">
                     <button class="theme-select-btn" onclick="applyTheme('blue')" style="display:flex; align-items:center; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; background:white; cursor:pointer; font-weight:bold;">
                         <span style="width:20px; height:20px; border-radius:50%; background:#0a3a6e; margin-right:10px; border:1px solid #ddd;"></span> 学术深蓝 (默认)
                     </button>
@@ -460,6 +465,21 @@
                     <button class="theme-select-btn" onclick="applyTheme('purple')" style="display:flex; align-items:center; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; background:white; cursor:pointer; font-weight:bold;">
                         <span style="width:20px; height:20px; border-radius:50%; background:#311b92; margin-right:10px; border:1px solid #ddd;"></span> 庄重华紫
                     </button>
+                </div>
+                <h3 style="border-top:1px solid #eee; padding-top:15px; margin-top:15px;">自定义背景</h3>
+                <div class="form-group">
+                    <label>海报背景图 (自定义)</label>
+                    <input type="file" accept="image/*" onchange="uploadCustomBg(this, 'posterBg')" class="form-control" style="font-size:0.8rem;">
+                    <div style="display:flex; gap:5px; margin-top:5px;">
+                        <button onclick="clearCustomBg('posterBg')" style="font-size:0.75rem; color:#d32f2f; background:none; border:none; cursor:pointer; padding:0;">[清除海报背景]</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>幻灯片背景图 (自定义)</label>
+                    <input type="file" accept="image/*" onchange="uploadCustomBg(this, 'slideBg')" class="form-control" style="font-size:0.8rem;">
+                    <div style="display:flex; gap:5px; margin-top:5px;">
+                        <button onclick="clearCustomBg('slideBg')" style="font-size:0.75rem; color:#d32f2f; background:none; border:none; cursor:pointer; padding:0;">[清除幻灯片背景]</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -536,6 +556,33 @@
         </div>
     </div>
 
+    <!-- Batch Import People Modal -->
+    <div class="modal" id="batch-people-modal">
+        <div class="modal-content" style="width: 500px;">
+            <div class="modal-header">
+                <h3>批量导入参会嘉宾</h3>
+                <button onclick="closeBatchPeopleModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">×</button>
+            </div>
+            <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">每行输入一个嘉宾，格式为：<strong>姓名 职称 医院</strong>（以空格隔开）</p>
+            <div class="form-group">
+                <textarea id="batch-people-input" class="form-control" rows="10" placeholder="例如：
+肖胜英 教授 湖南省人民医院
+谢定芳 副主任医师 湘潭市中心医院
+何白梅 主任医师 中南大学湘雅医院"></textarea>
+            </div>
+            <div class="form-group">
+                <label>默认导入身份</label>
+                <select id="batch-people-role" class="form-control">
+                    <option value="discussant">讨论嘉宾</option>
+                    <option value="speaker">讲者</option>
+                    <option value="host">主持</option>
+                    <option value="chair">大会主席</option>
+                </select>
+            </div>
+            <button onclick="importPeopleBatch()" style="width:100%; padding:10px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">确认导入</button>
+        </div>
+    </div>
+
     <!-- AI Settings Modal -->
     <div class="modal" id="ai-modal">
         <div class="modal-content">
@@ -566,6 +613,29 @@
                 <input type="text" id="ai-model" class="form-control" placeholder="例如: gpt-3.5-turbo">
             </div>
             <button onclick="saveAISettings()" style="width:100%; padding:10px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer;">保存设置</button>
+        </div>
+    </div>
+
+    <!-- AI Parse Modal -->
+    <div class="modal" id="ai-parse-modal">
+        <div class="modal-content" style="width:600px; max-width:95%;">
+            <div class="modal-header">
+                <h3>🔮 AI 会议一键智能解析</h3>
+                <button onclick="closeAIParseModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">×</button>
+            </div>
+            <p style="font-size:0.8rem; color:#666; margin-bottom:15px;">在下方粘贴您从任何 PPT、Word 或微信通知中复制出的会议原始日程和嘉宾简介文本。AI 将自动为您分析并填充本工具所有参数。</p>
+            <div class="form-group">
+                <textarea id="ai-parse-input" class="form-control" rows="12" placeholder="例如粘贴以下内容：
+第一届肿瘤前沿论坛于2026年4月9日19:00举行。
+日程安排：
+19:00-19:10 主席致辞，发言专家：周蓉蓉（湘雅医院教授，博士生导师）。
+19:10-19:40 学术报告：食管癌研究进展。报告人：张莹莹（中南大学湘雅医院副主任医师，哈佛大学博士后）。
+19:40-20:10 讨论环节。主持：周蓉蓉。讨论嘉宾：肖胜英（湖南省人民医院副主任医师），谢定芳（湘潭市中心医院主任医师）"></textarea>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;">
+                <span style="font-size:0.75rem; color:#d32f2f;">⚠️ 警告：导入将覆盖当前日程和人员列表！</span>
+                <button onclick="parseContentWithAI(event)" style="padding:10px 20px; background:linear-gradient(135deg, #ab47bc, #7b1fa2); color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">开始智能解析</button>
+            </div>
         </div>
     </div>
 
@@ -700,15 +770,74 @@
                 li.addEventListener('drop', handleDrop);
                 li.addEventListener('dragend', handleDragEnd);
 
+                // Build speaker options
+                const speakers = state.people.filter(p => p.role === 'speaker' || p.role === 'chair');
+                const speakerOpts = speakers.map(p => `<option value="${p.id}" ${p.id === item.speakerId ? 'selected' : ''}>${p.name} (讲者/主席)</option>`).join('');
+                
+                // Build host options
+                const hosts = state.people.filter(p => p.role === 'host' || p.role === 'chair');
+                const hostOpts = hosts.map(p => `<option value="${p.id}" ${p.id === item.hostId ? 'selected' : ''}>${p.name} (主持)</option>`).join('');
+
+                let detailHtml = '';
+                if (item.type === 'discussion') {
+                    // Multi-select checkboxes for discussants
+                    const discussants = state.people.filter(p => p.role === 'discussant');
+                    const checkboxes = discussants.map(p => `
+                        <label style="font-size:0.75rem; display:flex; align-items:center; gap:2px; margin-right:8px; cursor:pointer;">
+                            <input type="checkbox" value="${p.id}" ${item.discussantIds && item.discussantIds.includes(p.id) ? 'checked' : ''} onchange="toggleAgendaDiscussant('${item.id}', '${p.id}', this.checked)">
+                            ${p.name}
+                        </label>
+                    `).join('');
+                    
+                    detailHtml = `
+                        <div class="agenda-detail" style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #eee; display:flex; flex-direction:column; gap:5px;">
+                            <div style="display:flex; gap:15px; align-items:center;">
+                                <label style="font-size:0.75rem; color:#666; font-weight:bold;">主持:</label>
+                                <select onchange="updateAgendaItem('${item.id}', 'hostId', this.value)" style="font-size:0.8rem; padding:2px; border-radius:3px;">
+                                     <option value="">-- 无 --</option>
+                                     ${hostOpts}
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size:0.75rem; color:#666; font-weight:bold; display:block; margin-bottom:2px;">讨论嘉宾:</label>
+                                <div style="display:flex; flex-wrap:wrap; gap:2px; max-height:80px; overflow-y:auto; background:#fff; border:1px solid #ddd; padding:4px; border-radius:4px; width:100%; box-sizing:border-box;">
+                                    ${checkboxes || '<span style="color:#ccc; font-size:0.75rem;">请先在“人员”面板中添加“讨论嘉宾”</span>'}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (item.type !== 'break') {
+                    detailHtml = `
+                        <div class="agenda-detail" style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #eee; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <div>
+                                <label style="font-size:0.75rem; color:#666; font-weight:bold;">讲者:</label>
+                                <select onchange="updateAgendaItem('${item.id}', 'speakerId', this.value)" style="font-size:0.8rem; padding:2px; border-radius:3px; max-width:120px;">
+                                     <option value="">-- 无 --</option>
+                                     ${speakerOpts}
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size:0.75rem; color:#666; font-weight:bold;">主持:</label>
+                                <select onchange="updateAgendaItem('${item.id}', 'hostId', this.value)" style="font-size:0.8rem; padding:2px; border-radius:3px; max-width:120px;">
+                                     <option value="">-- 无 --</option>
+                                     ${hostOpts}
+                                </select>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 li.innerHTML = `
-                    <div class="agenda-header">
-                        <span class="agenda-icon" title="拖拽排序">⠿ ${typeInfo.icon}</span>
-                        <input type="text" class="agenda-title-input" value="${item.title}" oninput="updateAgendaItem('${item.id}', 'title', this.value)">
-                        <input type="number" class="agenda-duration" value="${item.duration}" oninput="updateAgendaItem('${item.id}', 'duration', this.value)">
-                        <span style="font-size:0.8rem; margin-left:2px;">分</span>
-                        <span class="agenda-time">${item.startTimeStr || ''} - ${item.endTimeStr || ''}</span>
-                        <button class="agenda-delete" title="删除" onclick="deleteAgendaItem('${item.id}')">×</button>
+                    <div class="agenda-header" style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+                        <span class="agenda-icon" style="cursor:grab; user-select:none; margin-right:5px;">⠿</span>
+                        <span style="font-size:1.1rem; margin-right:5px;">${typeInfo.icon}</span>
+                        <input type="text" class="agenda-title-input" value="${item.title}" oninput="updateAgendaItem('${item.id}', 'title', this.value)" style="flex:1;">
+                        <input type="number" class="agenda-duration" value="${item.duration}" oninput="updateAgendaItem('${item.id}', 'duration', this.value)" style="width:45px; text-align:center;">
+                        <span style="font-size:0.8rem; margin:0 3px;">分</span>
+                        <span class="agenda-time" style="font-size:0.8rem; color:#666; min-width:85px; text-align:right;">${item.startTimeStr || ''} - ${item.endTimeStr || ''}</span>
+                        <button class="agenda-delete" onclick="deleteAgendaItem('${item.id}')" style="background:none; border:none; color:#d32f2f; cursor:pointer; font-size:1.2rem; padding:0 5px;">×</button>
                     </div>
+                    ${detailHtml}
                 `;
                 listEl.appendChild(li);
             });
@@ -720,15 +849,28 @@
                 if (field === 'duration') {
                     item[field] = Math.max(1, parseInt(value) || 1);
                     calculateAgendaTimes();
-                    renderAgendaList(); // re-render to show updated times
-                    renderPosterAgendaPreview(); // update preview
-                    if(currentSlide === 2) renderSlideAgendaPreview();
+                    renderAgendaList();
                 } else {
                     item[field] = value;
-                    renderPosterAgendaPreview();
-                    if(currentSlide === 2) renderSlideAgendaPreview();
                 }
                 saveState();
+                if (typeof rebuildSlides === 'function') rebuildSlides();
+            }
+        }
+
+        function toggleAgendaDiscussant(agendaId, personId, checked) {
+            const item = state.agenda.find(a => a.id === agendaId);
+            if (item) {
+                if (!item.discussantIds) item.discussantIds = [];
+                if (checked) {
+                    if (!item.discussantIds.includes(personId)) {
+                        item.discussantIds.push(personId);
+                    }
+                } else {
+                    item.discussantIds = item.discussantIds.filter(id => id !== personId);
+                }
+                saveState();
+                if (typeof rebuildSlides === 'function') rebuildSlides();
             }
         }
 
@@ -738,11 +880,15 @@
                 id: generateId(),
                 type: type,
                 title: typeInfo.defaultTitle,
-                duration: typeInfo.defaultDuration
+                duration: typeInfo.defaultDuration,
+                speakerId: '',
+                hostId: '',
+                discussantIds: []
             });
             calculateAgendaTimes();
             renderAgendaList();
             saveState();
+            if (typeof rebuildSlides === 'function') rebuildSlides();
         }
 
         function deleteAgendaItem(id) {
@@ -750,6 +896,7 @@
             calculateAgendaTimes();
             renderAgendaList();
             saveState();
+            if (typeof rebuildSlides === 'function') rebuildSlides();
         }
 
         // --- People Module ---
@@ -855,6 +1002,7 @@
             
             saveState();
             renderPeopleList();
+            if (typeof rebuildSlides === 'function') rebuildSlides();
             closePersonModal();
         }
 
@@ -863,6 +1011,7 @@
                 state.people = state.people.filter(x => x.id !== id);
                 saveState();
                 renderPeopleList();
+                if (typeof rebuildSlides === 'function') rebuildSlides();
             }
         }
 
@@ -904,8 +1053,11 @@
                 container.appendChild(groupEl);
             });
             
-            // Re-render slide 3 if active
-            if(currentSlide === 3) switchSlide(3);
+            if (typeof rebuildSlides === 'function') rebuildSlides();
+            if (typeof switchSlide === 'function') {
+                if (currentSlide >= slideList.length) currentSlide = slideList.length - 1;
+                switchSlide(currentSlide);
+            }
         }
 
         // --- Drag and Drop Logic ---
@@ -934,6 +1086,7 @@
                 
                 calculateAgendaTimes();
                 renderAgendaList();
+                if (typeof rebuildSlides === 'function') rebuildSlides();
                 saveState();
             }
             return false;
@@ -943,9 +1096,9 @@
             this.classList.remove('dragging');
         }
 
-        // --- UI & Nav ---
+        // --- UI & Nav & Slide Engine ---
         let currentSlide = 0;
-        const totalSlides = 5;
+        let slideList = [];
 
         function switchTab(tabId) {
             const btns = document.querySelectorAll('.tab-btn');
@@ -958,85 +1111,291 @@
             document.getElementById(tabId).classList.add('active');
         }
 
+        function rebuildSlides() {
+            slideList = [];
+            
+            // 1. Poster Slide (always index 0)
+            slideList.push({ type: 'poster' });
+            
+            // 2. Cover Slide (always index 1)
+            slideList.push({ type: 'cover' });
+            
+            // 3. Agenda Slide (always index 2)
+            slideList.push({ type: 'agenda' });
+            
+            // 4. Generate slides based on agenda items
+            state.agenda.forEach(item => {
+                if (item.type === 'opening' || item.type === 'closing') {
+                    let speaker = state.people.find(p => p.id === item.speakerId);
+                    let host = state.people.find(p => p.id === item.hostId);
+                    
+                    slideList.push({
+                        type: 'transition',
+                        title: item.title,
+                        subtitle: (speaker ? `${speaker.name} ${ROLE_NAMES[speaker.role] || ''}` : '') + (host ? ` / 主持: ${host.name}` : ''),
+                        theme: state.template || 'blue'
+                    });
+                    
+                    if (speaker) slideList.push({ type: 'bio', personId: speaker.id });
+                    if (host) slideList.push({ type: 'bio', personId: host.id });
+                    
+                } else if (item.type === 'talk' || item.type === 'case' || item.type === 'custom') {
+                    let speaker = state.people.find(p => p.id === item.speakerId);
+                    let host = state.people.find(p => p.id === item.hostId);
+                    
+                    slideList.push({
+                        type: 'transition',
+                        title: item.title,
+                        subtitle: speaker ? `${speaker.name} ${ROLE_NAMES[speaker.role] || ''} (${speaker.bio ? speaker.bio.split(/[，,]/)[0] : ''})` : '暂无讲者',
+                        hostText: host ? `主持: ${host.name} (${host.bio ? host.bio.split(/[，,]/)[0] : ''})` : '',
+                        theme: state.template || 'blue'
+                    });
+                    
+                    if (speaker) slideList.push({ type: 'bio', personId: speaker.id });
+                    if (host) slideList.push({ type: 'bio', personId: host.id });
+                    
+                } else if (item.type === 'discussion') {
+                    let host = state.people.find(p => p.id === item.hostId);
+                    let discussantIds = item.discussantIds || [];
+                    
+                    slideList.push({
+                        type: 'transition',
+                        title: item.title,
+                        subtitle: host ? `主持: ${host.name}` : '讨论环节',
+                        theme: state.template || 'blue'
+                    });
+                    
+                    slideList.push({
+                        type: 'discussion_panel',
+                        agendaId: item.id,
+                        hostId: item.hostId,
+                        discussantIds: discussantIds
+                    });
+                } else if (item.type === 'break') {
+                    slideList.push({
+                        type: 'transition',
+                        title: '茶歇 / 休息',
+                        subtitle: 'Coffee Break',
+                        theme: state.template || 'blue'
+                    });
+                }
+            });
+            
+            renderThumbnailStrip();
+        }
+
+        function renderThumbnailStrip() {
+            const strip = document.getElementById('thumbnail-strip');
+            if (!strip) return;
+            strip.innerHTML = '';
+            
+            slideList.forEach((slide, index) => {
+                const thumb = document.createElement('div');
+                thumb.className = `thumbnail ${index === 0 ? 'poster-thumb' : ''} ${index === currentSlide ? 'active' : ''}`;
+                thumb.onclick = () => switchSlide(index);
+                
+                let label = '';
+                if (slide.type === 'poster') label = '海报';
+                else if (slide.type === 'cover') label = '封面';
+                else if (slide.type === 'agenda') label = '日程';
+                else if (slide.type === 'transition') label = slide.title.substring(0, 4);
+                else if (slide.type === 'bio') {
+                    let p = state.people.find(x => x.id === slide.personId);
+                    label = p ? `${p.name}` : '简介';
+                }
+                else if (slide.type === 'discussion_panel') label = '嘉宾墙';
+                
+                thumb.innerText = label;
+                strip.appendChild(thumb);
+            });
+            
+            const indicator = document.getElementById('slide-indicator');
+            if (indicator) {
+                indicator.innerText = `第 ${currentSlide + 1} / ${slideList.length} 张`;
+            }
+        }
+
         function switchSlide(index) {
+            if (index < 0 || index >= slideList.length) return;
             currentSlide = index;
-            const canvas = document.getElementById('slide-canvas');
             
             const thumbs = document.querySelectorAll('.thumbnail');
-            for(let i=0; i<thumbs.length; i++) {
-                if(i === index) thumbs[i].classList.add('active');
-                else thumbs[i].classList.remove('active');
-            }
-
-            if (index === 0) {
+            thumbs.forEach((t, idx) => {
+                if (idx === index) t.classList.add('active');
+                else t.classList.remove('active');
+            });
+            
+            const canvas = document.getElementById('slide-canvas');
+            const slide = slideList[index];
+            
+            canvas.style.backgroundImage = '';
+            canvas.style.backgroundSize = '';
+            canvas.style.backgroundPosition = '';
+            canvas.style.backgroundColor = '';
+            
+            if (slide.type === 'poster') {
                 canvas.classList.add('poster-mode');
+                if (state.meta.posterBg) {
+                    canvas.style.backgroundImage = `url(${state.meta.posterBg})`;
+                    canvas.style.backgroundSize = 'cover';
+                    canvas.style.backgroundPosition = 'center';
+                } else {
+                    canvas.style.background = 'linear-gradient(180deg, #cde8f8, #e8f5ff, #f2f8ff, #daeeff)';
+                }
+                
                 canvas.innerHTML = `
-                    <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="text-align: center; margin-bottom: 20px; z-index: 2;">
                         <h1 class="editable-text" contenteditable="true" id="canvas-title" onblur="syncToForm('title', this.innerText)" style="margin:0; font-family: var(--font-serif); font-size: 52px; letter-spacing: 6px;">${state.meta.title}</h1>
                         <div class="editable-text" contenteditable="true" id="canvas-subtitle" onblur="syncToForm('subtitle', this.innerText)" style="margin-top:10px; font-size: 14px; letter-spacing: 4px;">${state.meta.subtitle}</div>
                     </div>
-                    <div style="margin-top: 40px; padding: 10px 30px; background: rgba(255,255,255,0.8); border-radius: 10px; width: 80%;">
+                    <div style="margin-top: 40px; padding: 10px 30px; background: rgba(255,255,255,0.85); border-radius: 10px; width: 80%; z-index: 2; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
                         <div id="poster-agenda-preview" style="font-size: 14px; margin-top: 15px; color:#333; text-align: left;"></div>
                     </div>
                 `;
                 renderPosterAgendaPreview();
             } else {
                 canvas.classList.remove('poster-mode');
+                if (state.meta.slideBg) {
+                    canvas.style.backgroundImage = `url(${state.meta.slideBg})`;
+                    canvas.style.backgroundSize = 'cover';
+                    canvas.style.backgroundPosition = 'center';
+                } else {
+                    canvas.style.backgroundColor = 'var(--primary-color)';
+                }
+                
                 let content = '';
-                if(index === 1) {
-                    content = `<h1 class="editable-text" contenteditable="true" style="font-family:var(--font-serif);">${state.meta.title}</h1><h3 class="editable-text" contenteditable="true" style="color:#bbdefb">${state.meta.subtitle}</h3>`;
-                }
-                else if(index === 2) {
-                    content = `<h2>会议日程</h2><div id="slide-agenda-preview" style="font-size:16px; text-align:left; width: 80%;"></div>`;
-                }
-                else if(index === 3) {
-                    content = `<h2>大会核心嘉宾</h2><div id="slide-people-preview" style="display:flex; flex-wrap:wrap; justify-content:center; gap:20px; width:90%; margin-top:20px;"></div>`;
-                }
-                else if(index === 4) {
-                    content = `<h2>大会串场词</h2><div style="font-size:18px; text-align:left; width: 80%; line-height:1.6; white-space:pre-wrap; max-height:300px; overflow-y:auto; color:white;">${state.meta.script || '请在左侧点击“自动生成大会串场词”或手动输入'}</div>`;
+                if (slide.type === 'cover') {
+                    content = `
+                        <div style="text-align:center; padding:20px;">
+                            <h1 style="font-family:var(--font-serif); font-size: 40px; margin-bottom: 20px; text-shadow:0 2px 4px rgba(0,0,0,0.3);">${state.meta.title}</h1>
+                            <h3 style="color:#bbdefb; font-size: 18px; font-weight: normal; letter-spacing: 2px; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${state.meta.subtitle}</h3>
+                            <div style="margin-top: 50px; font-size: 16px; opacity:0.8;">${state.meta.date}</div>
+                        </div>
+                    `;
+                } else if (slide.type === 'agenda') {
+                    content = `
+                        <h2 style="font-family:var(--font-serif); font-size: 28px; margin-bottom: 20px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 10px; width: 85%;">会议日程</h2>
+                        <div id="slide-agenda-preview" style="font-size:16px; text-align:left; width: 85%;"></div>
+                    `;
+                } else if (slide.type === 'transition') {
+                    content = `
+                        <div style="text-align:center; padding: 40px; z-index:2;">
+                            <h1 style="font-family:var(--font-serif); font-size: 38px; margin-bottom: 20px; text-shadow:0 2px 4px rgba(0,0,0,0.3);">${slide.title}</h1>
+                            <h2 style="color:#bbdefb; font-size: 22px; font-weight: normal; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${slide.subtitle || ''}</h2>
+                            ${slide.hostText ? `<h3 style="margin-top: 30px; opacity: 0.9; font-weight: normal; font-size:16px;">${slide.hostText}</h3>` : ''}
+                        </div>
+                    `;
+                } else if (slide.type === 'bio') {
+                    let p = state.people.find(x => x.id === slide.personId);
+                    if (p) {
+                        let bioItems = p.bio ? p.bio.split(/[;\n；\r]+/) : [];
+                        let bioListHtml = bioItems.map(item => item.trim() ? `<li style="margin-bottom:6px;">${item.trim()}</li>` : '').join('');
+                        content = `
+                            <div style="display:flex; width: 85%; align-items: flex-start; gap: 30px; z-index:2;">
+                                <div style="text-align:center; width: 200px; flex-shrink:0;">
+                                    <img src="${p.avatarUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'><path fill=\'%23ccc\' d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/></svg>'}" style="width:140px; height:140px; border-radius:50%; object-fit:cover; border:4px solid white; box-shadow: 0 6px 15px rgba(0,0,0,0.3); margin-bottom:12px;">
+                                    <h2 style="margin:5px 0; font-size:24px;">${p.name}</h2>
+                                    <div style="font-size:14px; color:#bbdefb; font-weight:bold; margin-top:5px;">${ROLE_NAMES[p.role] || ''}</div>
+                                </div>
+                                <div style="flex:1; border-left: 2px solid rgba(255,255,255,0.2); padding-left: 25px; text-align:left;">
+                                    <h3 style="margin-top:0; font-size: 18px; color:#bbdefb; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px; margin-bottom:10px;">专家简介</h3>
+                                    <ul style="font-size:14px; line-height:1.6; padding-left: 20px; margin: 0; color:white;">
+                                        ${bioListHtml || '<li>暂无详细学术头衔介绍</li>'}
+                                    </ul>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        content = `<h2>专家简介</h2><p>未找到专家信息</p>`;
+                    }
+                } else if (slide.type === 'discussion_panel') {
+                    let host = state.people.find(p => p.id === slide.hostId);
+                    let discussants = state.people.filter(p => slide.discussantIds.includes(p.id));
+                    
+                    let discussantsHtml = discussants.map(p => `
+                        <div style="background:rgba(255,255,255,0.15); border-radius:6px; padding:8px 12px; display:flex; align-items:center; gap:10px; min-width: 180px; box-shadow:0 3px 8px rgba(0,0,0,0.1);">
+                            <img src="${p.avatarUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'><path fill=\'%23ccc\' d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/></svg>'}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid white;">
+                            <div style="text-align:left;">
+                                <div style="font-weight:bold; font-size:14px; color:white;">${p.name}</div>
+                                <div style="font-size:11px; opacity:0.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px; color:white;" title="${p.bio || ''}">${p.bio || ''}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    content = `
+                        <h2 style="font-family:var(--font-serif); font-size: 28px; margin-bottom: 15px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 8px; width: 85%;">讨论环节</h2>
+                        <div style="display:flex; flex-direction:column; align-items:center; width: 85%; gap: 15px; z-index:2;">
+                            ${host ? `
+                            <div style="background:rgba(255,255,255,0.2); border-radius:6px; padding:8px 15px; display:flex; align-items:center; gap:10px; width: fit-content; border: 1px solid rgba(255,255,255,0.3); text-align:left;">
+                                <strong style="color:#bbdefb; font-size:14px;">主持嘉宾：</strong>
+                                <span style="font-weight:bold; font-size:16px; color:white;">${host.name}</span>
+                                <span style="font-size:12px; opacity:0.9; margin-left: 10px; color:white;">${host.bio || ''}</span>
+                            </div>` : ''}
+                            
+                            <div style="width: 100%;">
+                                <div style="color:#bbdefb; font-weight:bold; font-size:14px; margin-bottom: 8px; text-align:left;">讨论嘉宾：</div>
+                                <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center;">
+                                    ${discussantsHtml || '<div style="opacity:0.5; color:white;">暂无讨论嘉宾</div>'}
+                                </div>
+                            </div>
+                        </div>
+                    `;
                 }
                 
                 canvas.innerHTML = content;
-                if(index === 2) renderSlideAgendaPreview();
-                if(index === 3) renderSlidePeoplePreview();
+                if (slide.type === 'agenda') renderSlideAgendaPreview();
             }
-
-            document.getElementById('slide-indicator').innerText = '第 ' + (index + 1) + ' / ' + totalSlides + ' 张';
-        }
-
-        function renderSlidePeoplePreview() {
-            const el = document.getElementById('slide-people-preview');
-            if (!el) return;
-            let html = '';
-            const importantPeople = state.people.filter(p => p.role === 'chair' || p.role === 'host' || p.role === 'speaker');
-            if(importantPeople.length === 0) {
-                el.innerHTML = '<p style="color:#ccc;">暂无主席或讲者信息，请在左侧添加</p>';
-                return;
+            
+            const indicator = document.getElementById('slide-indicator');
+            if (indicator) {
+                indicator.innerText = `第 ${currentSlide + 1} / ${slideList.length} 张`;
             }
-            importantPeople.forEach(p => {
-                html += `
-                    <div style="background:rgba(255,255,255,0.1); border-radius:10px; padding:20px; width:200px; text-align:center;">
-                        <img src="${p.avatarUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'><path fill=\'%23ccc\' d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/></svg>'}" style="width:100px; height:100px; border-radius:50%; object-fit:cover; border:3px solid white; margin-bottom:10px;">
-                        <h3 style="margin:5px 0;">${p.name}</h3>
-                        <div style="font-size:12px; color:#bbdefb;">${ROLE_NAMES[p.role]}</div>
-                        <div style="font-size:12px; margin-top:10px; opacity:0.8; height:40px; overflow:hidden;">${p.bio || ''}</div>
-                    </div>
-                `;
-            });
-            el.innerHTML = html;
         }
 
         function prevSlide() { if (currentSlide > 0) switchSlide(currentSlide - 1); }
-        function nextSlide() { if (currentSlide < totalSlides - 1) switchSlide(currentSlide + 1); }
+        function nextSlide() { if (currentSlide < slideList.length - 1) switchSlide(currentSlide + 1); }
+
+        function formatAgendaItemPeople(item) {
+            let parts = [];
+            if (item.type === 'discussion') {
+                const host = state.people.find(p => p.id === item.hostId);
+                if (host) {
+                    parts.push(`主持：${host.name}`);
+                }
+                if (item.discussantIds && item.discussantIds.length > 0) {
+                    const names = item.discussantIds.map(id => {
+                        const p = state.people.find(x => x.id === id);
+                        return p ? p.name : '';
+                    }).filter(Boolean);
+                    if (names.length > 0) {
+                        parts.push(`讨论：${names.join('、')}`);
+                    }
+                }
+            } else if (item.type !== 'break') {
+                const speaker = state.people.find(p => p.id === item.speakerId);
+                const host = state.people.find(p => p.id === item.hostId);
+                if (speaker) {
+                    parts.push(`讲者：${speaker.name}`);
+                }
+                if (host) {
+                    parts.push(`主持：${host.name}`);
+                }
+            }
+            return parts.join(' | ');
+        }
 
         function renderPosterAgendaPreview() {
             const el = document.getElementById('poster-agenda-preview');
             if (!el) return;
             let html = '<div style="text-align:center; font-weight:bold; margin-bottom:10px; color:var(--primary-color);">会议日程</div>';
             state.agenda.forEach(a => {
-                html += `<div style="display:flex; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(0,0,0,0.1); padding-bottom:4px;">
-                            <span style="font-weight:bold; color:var(--primary-color);">${a.startTimeStr} - ${a.endTimeStr}</span>
-                            <span>${a.title}</span>
+                const peopleInfo = formatAgendaItemPeople(a);
+                html += `<div style="margin-bottom:8px; border-bottom:1px solid rgba(0,0,0,0.08); padding-bottom:4px; font-size:12px;">
+                            <div style="display:flex; justify-content:space-between;">
+                                <span style="font-weight:bold; color:var(--primary-color);">${a.startTimeStr} - ${a.endTimeStr}</span>
+                                <span style="font-weight:bold; text-align:right; flex:1; padding-left:10px;">${a.title}</span>
+                            </div>
+                            ${peopleInfo ? `<div style="text-align:right; color:#666; font-size:11px; margin-top:2px;">${peopleInfo}</div>` : ''}
                          </div>`;
             });
             el.innerHTML = html;
@@ -1045,15 +1404,122 @@
         function renderSlideAgendaPreview() {
             const el = document.getElementById('slide-agenda-preview');
             if (!el) return;
-            let html = '<table style="width:100%; border-collapse:collapse; color:white;">';
+            let html = '<table style="width:100%; border-collapse:collapse; color:white; text-align:left; font-size:15px;">';
             state.agenda.forEach(a => {
+                const peopleInfo = formatAgendaItemPeople(a);
                 html += `<tr>
-                            <td style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.2); width:150px;">${a.startTimeStr} - ${a.endTimeStr}</td>
-                            <td style="padding:12px; border-bottom:1px solid rgba(255,255,255,0.2);">${a.title}</td>
+                            <td style="padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.2); width:130px; font-weight:bold; vertical-align:top;">${a.startTimeStr} - ${a.endTimeStr}</td>
+                            <td style="padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.2); vertical-align:top;">
+                                <div style="font-weight:bold; margin-bottom:2px;">${a.title}</div>
+                                ${peopleInfo ? `<div style="font-size:12px; color:#bbdefb;">${peopleInfo}</div>` : ''}
+                            </td>
                          </tr>`;
             });
             html += '</table>';
             el.innerHTML = html;
+        }
+
+        // --- Batch Import People ---
+        function openBatchPeopleModal() {
+            document.getElementById('batch-people-modal').classList.add('active');
+            document.getElementById('batch-people-input').value = '';
+        }
+
+        function closeBatchPeopleModal() {
+            document.getElementById('batch-people-modal').classList.remove('active');
+        }
+
+        function importPeopleBatch() {
+            const rawText = document.getElementById('batch-people-input').value;
+            const role = document.getElementById('batch-people-role').value;
+            if (!rawText.trim()) {
+                alert("请输入需要导入的人员名单！");
+                return;
+            }
+            
+            const lines = rawText.split('\n');
+            let successCount = 0;
+            
+            lines.forEach(line => {
+                const cleanLine = line.trim();
+                if (!cleanLine) return;
+                
+                const parts = cleanLine.split(/\s+/);
+                if (parts.length >= 1) {
+                    const name = parts[0];
+                    const title = parts[1] || '';
+                    const hospital = parts.slice(2).join(' ') || '';
+                    
+                    const py = window.pinyinPro ? pinyinPro.pinyin(name, { toneType: 'none', type: 'array' }).join('') : name;
+                    
+                    let bio = hospital;
+                    if (title) bio += (bio ? ' ' : '') + title;
+                    
+                    state.people.push({
+                        id: generateId(),
+                        role: role,
+                        name: name,
+                        bio: bio,
+                        pinyin: py,
+                        avatarUrl: null
+                    });
+                    successCount++;
+                }
+            });
+            
+            if (successCount > 0) {
+                saveState();
+                renderPeopleList();
+                rebuildSlides();
+                alert(`成功导入 ${successCount} 位参会嘉宾！`);
+            } else {
+                alert("导入失败，请检查输入名单");
+            }
+            closeBatchPeopleModal();
+        }
+
+        // --- Custom Background Image Upload ---
+        function uploadCustomBg(input, key) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    const maxW = 1200;
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxW) {
+                        h = Math.round((h * maxW) / w);
+                        w = maxW;
+                    }
+                    
+                    canvas.width = w;
+                    canvas.height = h;
+                    ctx.drawImage(img, 0, 0, w, h);
+                    
+                    const base64 = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    state.meta[key] = base64;
+                    saveState();
+                    switchSlide(currentSlide);
+                    alert("自定义背景图上传成功！");
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearCustomBg(key) {
+            if (confirm("确定要恢复默认背景吗？")) {
+                state.meta[key] = null;
+                saveState();
+                switchSlide(currentSlide);
+            }
         }
 
         // --- AI Module ---
@@ -1162,6 +1628,157 @@
             }
         }
 
+        function openAIParseModal() {
+            document.getElementById('ai-parse-modal').classList.add('active');
+            document.getElementById('ai-parse-input').value = '';
+        }
+
+        function closeAIParseModal() {
+            document.getElementById('ai-parse-modal').classList.remove('active');
+        }
+
+        async function parseContentWithAI(e) {
+            const rawText = document.getElementById('ai-parse-input').value.trim();
+            if (!rawText) {
+                alert("请输入需要解析的文本内容！");
+                return;
+            }
+            
+            const btn = e.target;
+            const originalText = btn.innerText;
+            btn.innerText = "⏳ 正在解析中...";
+            btn.disabled = true;
+
+            const prompt = `你是一个专业的会议日程和嘉宾数据解析器。下面有一段杂乱的会议通知文本或日程排班表，请将其中的会议基本信息（标题、副标题、日期、开始时间）、日程安排表、参会嘉宾/讲者/主持人的名单及原始简介提取出来，并按照指定的JSON格式输出。
+
+【特别要求】：
+1. 提取的所有专家的个人简介（bio）必须是他们的【原始头衔与学术兼职列表】，请原封不动地保留其核心内容，不可删改关键职称、科室和医院信息。
+2. 每一个 agenda 环节，请根据文本找到其关联的讲者（speaker）、主持人（host）、讨论嘉宾（discussants），并在JSON的对应字段中以对象格式输出他们。
+3. 如果 agenda 环节没有主持人或讲者，对应字段留空。
+4. 返回的内容必须是合法的 JSON 字符串，不能有任何 Markdown 标记（如 \`\`\`json 等）或多余的解释。
+
+【JSON 格式 Schema】：
+{
+  "title": "会议主标题",
+  "subtitle": "副标题",
+  "date": "日期 (格式如: 2026-04-09)",
+  "startTime": "开始时间 (格式如: 19:00)",
+  "agenda": [
+    {
+      "type": "opening | talk | case | discussion | break | closing | custom",
+      "title": "环节标题",
+      "duration": 时长分钟数数字,
+      "speaker": {
+        "name": "姓名",
+        "role": "speaker | chair",
+        "bio": "保留核心头衔的原始个人介绍"
+      },
+      "host": {
+        "name": "主持姓名",
+        "role": "host | chair",
+        "bio": "原始主持简介"
+      },
+      "discussants": [
+        {
+          "name": "姓名",
+          "role": "discussant",
+          "bio": "原始讨论嘉宾简介"
+        }
+      ]
+    }
+  ]
+}
+
+【原始待解析会议文本】：
+${rawText}
+
+【返回结果】：`;
+
+            const res = await callAI(prompt);
+            btn.innerText = originalText;
+            btn.disabled = false;
+
+            if (!res) {
+                alert("解析失败，AI未返回有效内容。");
+                return;
+            }
+
+            try {
+                const jsonStr = res.replace(/```json/g, '').replace(/```/g, '').trim();
+                const data = JSON.parse(jsonStr);
+                
+                state.meta.title = data.title || '精诚医途';
+                state.meta.subtitle = data.subtitle || '';
+                state.meta.date = data.date || '2026-04-09';
+                state.meta.startTime = data.startTime || '19:00';
+                state.agenda = [];
+                state.people = [];
+
+                function addPersonIfNotExists(pObj) {
+                    if (!pObj || !pObj.name) return null;
+                    let existing = state.people.find(p => p.name === pObj.name && p.role === pObj.role);
+                    if (existing) return existing.id;
+                    
+                    const py = window.pinyinPro ? pinyinPro.pinyin(pObj.name, { toneType: 'none', type: 'array' }).join('') : pObj.name;
+                    const id = generateId();
+                    state.people.push({
+                        id: id,
+                        role: pObj.role || 'discussant',
+                        name: pObj.name,
+                        bio: pObj.bio || '',
+                        pinyin: py,
+                        avatarUrl: null
+                    });
+                    return id;
+                }
+
+                if (data.agenda && Array.isArray(data.agenda)) {
+                    data.agenda.forEach(a => {
+                        let speakerId = '';
+                        let hostId = '';
+                        let discussantIds = [];
+
+                        if (a.speaker) {
+                            speakerId = addPersonIfNotExists(a.speaker);
+                        }
+                        if (a.host) {
+                            hostId = addPersonIfNotExists(a.host);
+                        }
+                        if (a.discussants && Array.isArray(a.discussants)) {
+                            a.discussants.forEach(d => {
+                                const dId = addPersonIfNotExists(d);
+                                if (dId) discussantIds.push(dId);
+                            });
+                        }
+
+                        state.agenda.push({
+                            id: generateId(),
+                            type: a.type || 'talk',
+                            title: a.title || '学术报告',
+                            duration: parseInt(a.duration) || 30,
+                            speakerId: speakerId,
+                            hostId: hostId,
+                            discussantIds: discussantIds
+                        });
+                    });
+                }
+
+                initForms();
+                calculateAgendaTimes();
+                renderAgendaList();
+                renderPeopleList();
+                rebuildSlides();
+                saveState();
+                switchSlide(0);
+
+                closeAIParseModal();
+                alert("🔮 AI 智能解析成功，已导入全部议程与嘉宾数据！");
+            } catch (err) {
+                console.error("AI JSON Parse Error: ", err, res);
+                alert("智能解析失败，AI 返回的数据格式不正确。可以重试或检查您的大模型设置。\n错误：" + err.message);
+            }
+        }
+
         // --- Theme Engine ---
         const THEMES = {
             'blue': { primary: '#0a3a6e', mid: '#1565c0', light: '#1e88e5' },
@@ -1199,43 +1816,302 @@
         }
 
         // --- Export Module ---
-        async function exportToPPT() {
-            const btn = event.target;
-            const originalText = btn.innerText;
-            btn.innerText = "⏳ 正在生成幻灯片...";
-            btn.disabled = true;
+        async function exportPosterPPT(e) {
+            const ev = e || window.event;
+            const btn = ev ? ev.target : null;
+            let originalText = "🎨 导出海报 (PPT)";
+            if (btn) {
+                originalText = btn.innerText;
+                btn.innerText = "正在生成海报 PPT...";
+                btn.disabled = true;
+            }
+
+            try {
+                let pptx = new PptxGenJS();
+                pptx.defineLayout({ name: 'POSTER', width: 4.58, height: 10.0 });
+                pptx.layout = 'POSTER';
+                
+                let slide = pptx.addSlide();
+                
+                if (state.meta.posterBg) {
+                    slide.background = { data: state.meta.posterBg };
+                } else {
+                    slide.background = { fill: 'e3f2fd' };
+                }
+                
+                slide.addText(state.meta.title, {
+                    x: 0.2, y: 0.5, w: 4.18, h: 1.2,
+                    align: 'center', fontSize: 22, fontFace: 'Microsoft YaHei', bold: true, color: '0a3a6e'
+                });
+                
+                slide.addText(state.meta.subtitle, {
+                    x: 0.2, y: 1.8, w: 4.18, h: 0.6,
+                    align: 'center', fontSize: 11, fontFace: 'Microsoft YaHei', color: '1565c0'
+                });
+
+                slide.addShape(pptx.shapes.RECTANGLE, {
+                    x: 0.3, y: 2.8, w: 3.98, h: 6.8,
+                    fill: { color: 'ffffff', transparency: 10 },
+                    rectRadius: 0.1,
+                    line: { color: 'cccccc', width: 1 }
+                });
+                
+                slide.addText('会议日程', {
+                    x: 0.3, y: 3.0, w: 3.98, h: 0.4,
+                    align: 'center', fontSize: 12, bold: true, color: '0a3a6e'
+                });
+                
+                let yPos = 3.5;
+                state.agenda.forEach(a => {
+                    const peopleInfo = formatAgendaItemPeople(a);
+                    const itemH = peopleInfo ? 0.42 : 0.28;
+                    if (yPos + itemH > 9.4) return;
+                    
+                    slide.addText(a.startTimeStr + ' - ' + a.endTimeStr, {
+                        x: 0.5, y: yPos, w: 1.1, h: 0.2,
+                        fontSize: 8, bold: true, color: '0a3a6e'
+                    });
+                    
+                    slide.addText(a.title, {
+                        x: 1.7, y: yPos, w: 2.4, h: 0.2,
+                        fontSize: 8, bold: true, color: '333333'
+                    });
+                    
+                    if (peopleInfo) {
+                        slide.addText(peopleInfo, {
+                            x: 1.7, y: yPos + 0.18, w: 2.4, h: 0.18,
+                            fontSize: 7, color: '666666'
+                        });
+                    }
+                    
+                    yPos += itemH + 0.05;
+                });
+
+                await pptx.writeFile({ fileName: state.meta.title + '_会议海报.pptx' });
+            } catch(e) {
+                alert("导出海报失败: " + e.message);
+                console.error(e);
+            } finally {
+                if (btn) {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        async function exportSlidesPPT(e) {
+            const ev = e || window.event;
+            const btn = ev ? ev.target : null;
+            let originalText = "📽️ 导出串场 (PPT)";
+            if (btn) {
+                originalText = btn.innerText;
+                btn.innerText = "正在生成串场 PPT...";
+                btn.disabled = true;
+            }
 
             try {
                 let pptx = new PptxGenJS();
                 pptx.layout = 'LAYOUT_16x9';
 
-                const originalSlide = currentSlide;
-                
-                // Render Slide 1, 2, 3, 4 as PPT (skipping 0 which is poster)
-                for(let i=1; i<totalSlides; i++) {
-                    switchSlide(i);
-                    // Small delay to ensure DOM update and image load
-                    await new Promise(r => setTimeout(r, 500));
-                    
-                    const canvasEl = document.getElementById('slide-canvas');
-                    const canvas = await html2canvas(canvasEl, { scale: 2, useCORS: true });
-                    const imgData = canvas.toDataURL('image/png');
-                    
+                for(let i = 1; i < slideList.length; i++) {
+                    const slideObj = slideList[i];
                     let slide = pptx.addSlide();
-                    slide.background = { data: imgData };
+                    
+                    if (state.meta.slideBg) {
+                        slide.background = { data: state.meta.slideBg };
+                    } else {
+                        const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
+                        slide.background = { fill: theme.primary.replace('#', '') };
+                    }
+                    
+                    if (slideObj.type === 'cover') {
+                        slide.addText(state.meta.title, {
+                            x: 0.5, y: 1.5, w: 9.0, h: 1.0,
+                            align: 'center', fontSize: 32, bold: true, color: 'ffffff'
+                        });
+                        slide.addText(state.meta.subtitle, {
+                            x: 0.5, y: 2.6, w: 9.0, h: 0.8,
+                            align: 'center', fontSize: 18, color: 'bbdefb'
+                        });
+                        slide.addText(state.meta.date, {
+                            x: 0.5, y: 4.0, w: 9.0, h: 0.5,
+                            align: 'center', fontSize: 13, color: 'ffffff', opacity: 0.8
+                        });
+                    }
+                    else if (slideObj.type === 'agenda') {
+                        slide.addText('会议日程', {
+                            x: 1.0, y: 0.5, w: 8.0, h: 0.6,
+                            fontSize: 24, bold: true, color: 'ffffff'
+                        });
+                        
+                        let rows = [];
+                        state.agenda.forEach(a => {
+                            const peopleInfo = formatAgendaItemPeople(a);
+                            let textArr = [
+                                { text: a.title, options: { bold: true, color: 'ffffff', fontSize: 13 } }
+                            ];
+                            if (peopleInfo) {
+                                textArr.push({ text: '\n' + peopleInfo, options: { color: 'bbdefb', fontSize: 11 } });
+                            }
+                            rows.push([
+                                { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: 'ffffff', fontSize: 13 } },
+                                textArr
+                            ]);
+                        });
+                        
+                        slide.addTable(rows, {
+                            x: 1.0, y: 1.3, w: 8.0,
+                            colW: [2.5, 5.5],
+                            rowH: 0.45,
+                            fontSize: 13,
+                            border: { type: 'solid', color: 'ffffff', size: 1 }
+                        });
+                    }
+                    else if (slideObj.type === 'transition') {
+                        slide.addText(slideObj.title, {
+                            x: 1.0, y: 1.6, w: 8.0, h: 1.0,
+                            align: 'center', fontSize: 30, bold: true, color: 'ffffff'
+                        });
+                        slide.addText(slideObj.subtitle || '', {
+                            x: 1.0, y: 2.8, w: 8.0, h: 0.8,
+                            align: 'center', fontSize: 18, color: 'bbdefb'
+                        });
+                        if (slideObj.hostText) {
+                            slide.addText(slideObj.hostText, {
+                                x: 1.0, y: 3.8, w: 8.0, h: 0.5,
+                                align: 'center', fontSize: 14, color: 'ffffff', opacity: 0.9
+                            });
+                        }
+                    }
+                    else if (slideObj.type === 'bio') {
+                        let p = state.people.find(x => x.id === slideObj.personId);
+                        if (p) {
+                            if (p.avatarUrl) {
+                                slide.addImage({
+                                    data: p.avatarUrl,
+                                    x: 1.0, y: 0.8, w: 1.8, h: 1.8
+                                });
+                            } else {
+                                slide.addShape(pptx.shapes.RECTANGLE, {
+                                    x: 1.0, y: 0.8, w: 1.8, h: 1.8,
+                                    fill: { color: 'cccccc' },
+                                    line: { color: 'ffffff', width: 2 }
+                                });
+                            }
+                            
+                            slide.addText(p.name, {
+                                x: 0.8, y: 2.8, w: 2.2, h: 0.5,
+                                align: 'center', fontSize: 22, bold: true, color: 'ffffff'
+                            });
+                            slide.addText(ROLE_NAMES[p.role] || '', {
+                                x: 0.8, y: 3.4, w: 2.2, h: 0.4,
+                                align: 'center', fontSize: 12, color: 'bbdefb', bold: true
+                            });
+
+                            slide.addText('专家简介', {
+                                x: 3.5, y: 0.8, w: 5.7, h: 0.4,
+                                fontSize: 16, bold: true, color: 'bbdefb'
+                            });
+                            
+                            let bioItems = p.bio ? p.bio.split(/[;\n；\r]+/) : [];
+                            let cleanBioItems = bioItems.map(item => item.trim()).filter(Boolean);
+                            
+                            let bulletText = cleanBioItems.map(item => ({ text: item, options: { bullet: true, color: 'ffffff', fontSize: 12 } }));
+                            if (bulletText.length > 0) {
+                                slide.addText(bulletText, {
+                                    x: 3.5, y: 1.3, w: 5.7, h: 3.5,
+                                    align: 'left', lineSpacing: 22
+                                });
+                            } else {
+                                slide.addText('暂无详细学术头衔介绍', {
+                                    x: 3.5, y: 1.3, w: 5.7, h: 1.0,
+                                    color: 'ffffff', fontSize: 12
+                                });
+                            }
+                        }
+                    }
+                    else if (slideObj.type === 'discussion_panel') {
+                        let host = state.people.find(p => p.id === slideObj.hostId);
+                        let discussants = state.people.filter(p => slideObj.discussantIds.includes(p.id));
+                        
+                        slide.addText('讨论环节', {
+                            x: 0.8, y: 0.4, w: 8.4, h: 0.5,
+                            fontSize: 24, bold: true, color: 'ffffff'
+                        });
+                        
+                        if (host) {
+                            slide.addShape(pptx.shapes.RECTANGLE, {
+                                x: 1.5, y: 1.1, w: 7.0, h: 0.7,
+                                fill: { color: 'ffffff', transparency: 80 },
+                                line: { color: 'ffffff', width: 1 }
+                            });
+                            slide.addText([
+                                { text: '主持嘉宾：', options: { color: 'bbdefb', bold: true } },
+                                { text: host.name, options: { color: 'ffffff', bold: true } },
+                                { text: '  ' + (host.bio || ''), options: { color: 'ffffff', fontSize: 11 } }
+                            ], {
+                                x: 1.6, y: 1.1, w: 6.8, h: 0.7,
+                                align: 'left', fontSize: 13
+                            });
+                        }
+                        
+                        slide.addText('讨论嘉宾：', {
+                            x: 0.8, y: 2.0, w: 8.4, h: 0.3,
+                            fontSize: 13, bold: true, color: 'bbdefb'
+                        });
+                        
+                        let startX = 0.8;
+                        let startY = 2.4;
+                        let cardW = 1.6;
+                        let cardH = 0.9;
+                        let gapX = 0.1;
+                        let gapY = 0.15;
+                        
+                        discussants.forEach((p, idx) => {
+                            let col = idx % 5;
+                            let row = Math.floor(idx / 5);
+                            let x = startX + col * (cardW + gapX);
+                            let y = startY + row * (cardH + gapY);
+                            
+                            slide.addShape(pptx.shapes.RECTANGLE, {
+                                x: x, y: y, w: cardW, h: cardH,
+                                fill: { color: 'ffffff', transparency: 85 },
+                                rectRadius: 0.05
+                            });
+                            
+                            if (p.avatarUrl) {
+                                slide.addImage({
+                                    data: p.avatarUrl,
+                                    x: x + 0.08, y: y + 0.08, w: 0.32, h: 0.32
+                                });
+                            } else {
+                                slide.addShape(pptx.shapes.RECTANGLE, {
+                                    x: x + 0.08, y: y + 0.08, w: 0.32, h: 0.32,
+                                    fill: { color: 'cccccc' }
+                                });
+                            }
+                            
+                            slide.addText(p.name, {
+                                x: x + 0.45, y: y + 0.08, w: cardW - 0.5, h: 0.2,
+                                fontSize: 10, bold: true, color: 'ffffff'
+                            });
+                            slide.addText(p.bio || '', {
+                                x: x + 0.08, y: y + 0.5, w: cardW - 0.16, h: 0.35,
+                                fontSize: 8, color: 'ffffff', opacity: 0.8
+                            });
+                        });
+                    }
                 }
 
-                switchSlide(originalSlide);
-                
-                btn.innerText = "⏳ 正在打包下载...";
-                await pptx.writeFile({ fileName: `${state.meta.title}_演示文稿.pptx` });
-
+                await pptx.writeFile({ fileName: state.meta.title + '_会议串场.pptx' });
             } catch(e) {
-                alert("导出失败: " + e.message);
+                alert("导出串场 PPT 失败: " + e.message);
                 console.error(e);
             } finally {
-                btn.innerText = originalText;
-                btn.disabled = false;
+                if (btn) {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
             }
         }
 
@@ -1243,6 +2119,7 @@
         window.onload = () => {
             initForms();
             calculateAgendaTimes();
+            rebuildSlides();
             renderAgendaList();
             renderPeopleList();
             updateSaveStatus();
