@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>会议议程海报 & 串场工具 v1.2</title>
+    <title>会议议程海报 & 串场工具 v1.5</title>
     <script src="https://unpkg.com/pinyin-pro"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
     <style>
         :root {
             --primary-color: #0a3a6e;
@@ -372,9 +374,8 @@
         <div class="toolbar-title">📋 会议议程海报 & 串场工具 v1.2</div>
         <div class="toolbar-actions">
             <span id="save-status" style="font-size: 0.9rem; margin-right: 15px; opacity: 0.8;"></span>
-            <button onclick="alert('AI设置暂未实现')">⚙️ AI设置</button>
-            <button onclick="alert('关于信息')">ℹ️ 关于</button>
-            <button onclick="alert('导出功能菜单')">📤 导出 ▼</button>
+            <button onclick="openAIModal()">⚙️ AI设置</button>
+            <button onclick="exportToPPT()">📤 导出为 PPT</button>
         </div>
     </div>
 
@@ -457,7 +458,8 @@
                 <div class="thumbnail poster-thumb active" onclick="switchSlide(0)">海报</div>
                 <div class="thumbnail" onclick="switchSlide(1)">封面</div>
                 <div class="thumbnail" onclick="switchSlide(2)">议程表</div>
-                <div class="thumbnail" onclick="switchSlide(3)">开场</div>
+                <div class="thumbnail" onclick="switchSlide(3)">嘉宾</div>
+                <div class="thumbnail" onclick="switchSlide(4)">串场词</div>
             </div>
 
             <!-- Canvas Area -->
@@ -519,6 +521,30 @@
         </div>
     </div>
 
+    <!-- AI Settings Modal -->
+    <div class="modal" id="ai-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚙️ AI 设置</h3>
+                <button onclick="closeAIModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">×</button>
+            </div>
+            <p style="font-size:0.8rem; color:#666; margin-bottom:15px;">配置您的 AI 接口以启用智能功能（支持 OpenAI 等兼容格式）。</p>
+            <div class="form-group">
+                <label>API Base URL</label>
+                <input type="text" id="ai-baseurl" class="form-control" placeholder="例如: https://api.openai.com/v1">
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="ai-apikey" class="form-control" placeholder="sk-...">
+            </div>
+            <div class="form-group">
+                <label>模型名称</label>
+                <input type="text" id="ai-model" class="form-control" placeholder="例如: gpt-3.5-turbo">
+            </div>
+            <button onclick="saveAISettings()" style="width:100%; padding:10px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer;">保存设置</button>
+        </div>
+    </div>
+
     <script>
         // --- State Management ---
         const DEFAULT_STATE = {
@@ -526,7 +552,8 @@
                 title: '精诚医途',
                 subtitle: '临床综合能力建设项目',
                 date: '2026-04-09',
-                startTime: '19:00'
+                startTime: '19:00',
+                script: ''
             },
             agenda: [
                 { id: generateId(), type: 'opening', title: '主席致辞', duration: 10 },
@@ -593,6 +620,7 @@
             document.getElementById('input-subtitle').value = state.meta.subtitle;
             document.getElementById('input-date').value = state.meta.date;
             document.getElementById('input-time').value = state.meta.startTime;
+            document.getElementById('input-script').value = state.meta.script || '';
             syncToCanvas();
         }
 
@@ -892,7 +920,7 @@
 
         // --- UI & Nav ---
         let currentSlide = 0;
-        const totalSlides = 4;
+        const totalSlides = 5;
 
         function switchTab(tabId) {
             const btns = document.querySelectorAll('.tab-btn');
@@ -938,6 +966,9 @@
                 }
                 else if(index === 3) {
                     content = `<h2>大会核心嘉宾</h2><div id="slide-people-preview" style="display:flex; flex-wrap:wrap; justify-content:center; gap:20px; width:90%; margin-top:20px;"></div>`;
+                }
+                else if(index === 4) {
+                    content = `<h2>大会串场词</h2><div style="font-size:18px; text-align:left; width: 80%; line-height:1.6; white-space:pre-wrap; max-height:300px; overflow-y:auto; color:white;">${state.meta.script || '请在左侧点击“自动生成大会串场词”或手动输入'}</div>`;
                 }
                 
                 canvas.innerHTML = content;
@@ -998,6 +1029,117 @@
             });
             html += '</table>';
             el.innerHTML = html;
+        }
+
+        // --- AI Module ---
+        let aiConfig = JSON.parse(localStorage.getItem('conf_ai_config')) || { baseUrl: '', apiKey: '', model: '' };
+
+        function openAIModal() {
+            document.getElementById('ai-modal').classList.add('active');
+            document.getElementById('ai-baseurl').value = aiConfig.baseUrl;
+            document.getElementById('ai-apikey').value = aiConfig.apiKey;
+            document.getElementById('ai-model').value = aiConfig.model;
+        }
+
+        function closeAIModal() {
+            document.getElementById('ai-modal').classList.remove('active');
+        }
+
+        function saveAISettings() {
+            aiConfig.baseUrl = document.getElementById('ai-baseurl').value.trim();
+            aiConfig.apiKey = document.getElementById('ai-apikey').value.trim();
+            aiConfig.model = document.getElementById('ai-model').value.trim();
+            localStorage.setItem('conf_ai_config', JSON.stringify(aiConfig));
+            closeAIModal();
+            alert("AI 设置已保存");
+        }
+
+        async function callAI(prompt) {
+            if (!aiConfig.apiKey || !aiConfig.baseUrl || !aiConfig.model) {
+                alert("请先在顶部「AI 设置」中配置接口信息！");
+                return null;
+            }
+            try {
+                const response = await fetch(`${aiConfig.baseUrl}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${aiConfig.apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: aiConfig.model,
+                        messages: [{ role: 'user', content: prompt }]
+                    })
+                });
+                const data = await response.json();
+                if (data.error) throw new Error(data.error.message);
+                return data.choices[0].message.content;
+            } catch (err) {
+                alert("AI 请求失败：" + err.message);
+                return null;
+            }
+        }
+
+        async function generateScriptWithAI(e) {
+            const btn = e.target;
+            btn.innerText = "⏳ 正在撰写串场词...";
+            btn.disabled = true;
+
+            let prompt = `你是一个专业的主持人词稿撰写助手。请根据以下会议信息，为大会写一段简短、热情的开场与串场词（直接输出文本即可）：\n\n`;
+            prompt += `会议名称：${state.meta.title}\n副标题：${state.meta.subtitle}\n\n议程安排：\n`;
+            state.agenda.forEach(a => { prompt += `- ${a.startTimeStr}-${a.endTimeStr}: ${a.title}\n`; });
+            prompt += `\n主要嘉宾信息：\n`;
+            state.people.forEach(p => { if (p.role !== 'discussant') prompt += `- ${ROLE_NAMES[p.role]} ${p.name}: ${p.bio || ''}\n`; });
+
+            const res = await callAI(prompt);
+            btn.innerText = "✨ AI 自动生成大会串场词";
+            btn.disabled = false;
+            if (res) {
+                document.getElementById('input-script').value = res;
+                updateMeta('script', res);
+                if(currentSlide === 4) switchSlide(4);
+            }
+        }
+
+        // --- Export Module ---
+        async function exportToPPT() {
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "⏳ 正在生成幻灯片...";
+            btn.disabled = true;
+
+            try {
+                let pptx = new PptxGenJS();
+                pptx.layout = 'LAYOUT_16x9';
+
+                const originalSlide = currentSlide;
+                
+                // Render Slide 1, 2, 3, 4 as PPT (skipping 0 which is poster)
+                for(let i=1; i<totalSlides; i++) {
+                    switchSlide(i);
+                    // Small delay to ensure DOM update and image load
+                    await new Promise(r => setTimeout(r, 500));
+                    
+                    const canvasEl = document.getElementById('slide-canvas');
+                    const canvas = await html2canvas(canvasEl, { scale: 2, useCORS: true });
+                    const imgData = canvas.toDataURL('image/png');
+                    
+                    let slide = pptx.addSlide();
+                    slide.background = { data: imgData };
+                }
+
+                switchSlide(originalSlide);
+                
+                btn.innerText = "⏳ 正在打包下载...";
+                await pptx.writeFile({ fileName: `${state.meta.title}_演示文稿.pptx` });
+
+            } catch(e) {
+                alert("导出失败: " + e.message);
+                console.error(e);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
         }
 
         // --- Bootstrap ---
