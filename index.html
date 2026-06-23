@@ -446,6 +446,17 @@
                 <div id="people-list-container">
                     <!-- People groups rendered here -->
                 </div>
+
+                <!-- Common Guest Library Accordion -->
+                <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+                    <div onclick="toggleGuestLibrary()" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-weight:bold; font-size:0.9rem; color:var(--primary-color); margin-bottom:10px; user-select:none;">
+                        <span>👥 常用嘉宾库 (<span id="guest-lib-count">0</span>)</span>
+                        <span id="guest-lib-arrow">▶</span>
+                    </div>
+                    <div id="guest-library-container" style="display:none; max-height: 250px; overflow-y: auto; background:#f9f9f9; padding:8px; border-radius:6px; border:1px solid #eee;">
+                        <!-- Guest library list will be rendered here -->
+                    </div>
+                </div>
             </div>
 
             <!-- Tab: Template -->
@@ -660,10 +671,74 @@
         };
 
         let state = JSON.parse(localStorage.getItem('conf_pro')) || DEFAULT_STATE;
+        let guestLibrary = JSON.parse(localStorage.getItem('conf_guest_library')) || [];
         let saveTimeout = null;
 
         function generateId() {
             return Math.random().toString(36).substr(2, 9);
+        }
+
+        function getAvatarColor(name) {
+            if (!name) return '#6c757d';
+            const MORANDI_COLORS = ['#8f7a6e', '#5b7065', '#6a8296', '#827387', '#a17f7f', '#6c757d', '#8c92ac', '#78866b', '#7c6b58', '#4a6b82'];
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const index = Math.abs(hash) % MORANDI_COLORS.length;
+            return MORANDI_COLORS[index];
+        }
+
+        function getAvatarHtml(p, size = 140, border = '4px solid white', customStyle = '') {
+            if (p.avatarUrl) {
+                return `<img src="${p.avatarUrl}" style="width:${size}px; height:${size}px; border-radius:50%; object-fit:cover; border:${border}; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display:inline-block; ${customStyle}">`;
+            } else {
+                const initial = p.name ? p.name.charAt(0) : '?';
+                const fontSize = Math.round(size * 0.45);
+                const color = getAvatarColor(p.name);
+                return `<div style="width:${size}px; height:${size}px; border-radius:50%; background:${color}; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:${fontSize}px; border:${border}; box-shadow: 0 4px 10px rgba(0,0,0,0.2); user-select:none; ${customStyle}">${initial}</div>`;
+            }
+        }
+
+        function getBioLayoutOptions(bioItems) {
+            const count = bioItems.length;
+            if (count <= 4) {
+                return { fontSize: 14, lineSpacing: 24, marginBottom: 8 };
+            } else if (count <= 7) {
+                return { fontSize: 12, lineSpacing: 18, marginBottom: 5 };
+            } else {
+                return { fontSize: 10, lineSpacing: 14, marginBottom: 3 };
+            }
+        }
+
+        function saveGuestLibrary() {
+            localStorage.setItem('conf_guest_library', JSON.stringify(guestLibrary));
+            if (guestLibraryExpanded) renderGuestLibraryList();
+            const countEl = document.getElementById('guest-lib-count');
+            if (countEl) countEl.innerText = guestLibrary.length;
+        }
+
+        function syncToGuestLibrary(person) {
+            if (!person || !person.name) return;
+            const idx = guestLibrary.findIndex(x => x.name === person.name);
+            const pData = {
+                name: person.name,
+                bio: person.bio || '',
+                avatarUrl: person.avatarUrl || null,
+                pinyin: person.pinyin || ''
+            };
+            if (idx !== -1) {
+                if (!pData.avatarUrl && guestLibrary[idx].avatarUrl) {
+                    pData.avatarUrl = guestLibrary[idx].avatarUrl;
+                }
+                if (!pData.bio && guestLibrary[idx].bio) {
+                    pData.bio = guestLibrary[idx].bio;
+                }
+                guestLibrary[idx] = pData;
+            } else {
+                guestLibrary.push(pData);
+            }
+            saveGuestLibrary();
         }
 
         function saveState() {
@@ -999,7 +1074,7 @@
             } else {
                 state.people.push(pData);
             }
-            
+            syncToGuestLibrary(pData);
             saveState();
             renderPeopleList();
             if (typeof rebuildSlides === 'function') rebuildSlides();
@@ -1037,7 +1112,7 @@
                     const item = document.createElement('div');
                     item.className = 'person-item';
                     item.innerHTML = `
-                        <img src="${p.avatarUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'><path fill=\'%23ccc\' d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/></svg>'}" class="person-avatar">
+                        ${getAvatarHtml(p, 30, '1px solid #ccc', 'margin-right:10px; flex-shrink:0;')}
                         <div class="person-info">
                             <div class="person-name">${p.name}</div>
                             <div class="person-bio" title="${p.bio || ''}">${p.bio || '<span style="color:#ccc">无简介</span>'}</div>
@@ -1057,6 +1132,99 @@
             if (typeof switchSlide === 'function') {
                 if (currentSlide >= slideList.length) currentSlide = slideList.length - 1;
                 switchSlide(currentSlide);
+            }
+        }
+
+        let guestLibraryExpanded = false;
+        function toggleGuestLibrary() {
+            guestLibraryExpanded = !guestLibraryExpanded;
+            const container = document.getElementById('guest-library-container');
+            const arrow = document.getElementById('guest-lib-arrow');
+            if (guestLibraryExpanded) {
+                container.style.display = 'block';
+                arrow.innerText = '▼';
+                renderGuestLibraryList();
+            } else {
+                container.style.display = 'none';
+                arrow.innerText = '▶';
+            }
+        }
+
+        function renderGuestLibraryList() {
+            const countEl = document.getElementById('guest-lib-count');
+            if (countEl) countEl.innerText = guestLibrary.length;
+            
+            const container = document.getElementById('guest-library-container');
+            if (!container) return;
+            
+            if (guestLibrary.length === 0) {
+                container.innerHTML = '<div style="color:#aaa; text-align:center; font-size:0.8rem; padding:10px;">暂无常用嘉宾，添加专家后将自动同步至此。</div>';
+                return;
+            }
+            
+            let html = '<div style="display:flex; flex-direction:column; gap:6px;">';
+            guestLibrary.forEach((g, idx) => {
+                const initial = g.name.charAt(0);
+                const avatarHtml = g.avatarUrl 
+                    ? `<img src="${g.avatarUrl}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; display:inline-block; vertical-align:middle;">`
+                    : `<div style="width:30px; height:30px; border-radius:50%; background:${getAvatarColor(g.name)}; color:white; display:inline-flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.8rem; vertical-align:middle;">${initial}</div>`;
+                
+                html += `
+                    <div style="display:flex; align-items:center; justify-content:space-between; background:white; padding:6px 8px; border-radius:4px; box-shadow:0 1px 3px rgba(0,0,0,0.05); font-size:0.8rem;">
+                        <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
+                            ${avatarHtml}
+                            <div style="min-width:0; flex:1;">
+                                <div style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#333;">${g.name}</div>
+                                <div style="color:#666; font-size:0.7rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${g.bio || '无简介'}</div>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:5px; align-items:center; flex-shrink:0;">
+                            <select onchange="addGuestFromLibrary(${idx}, this.value); this.value='';" style="font-size:0.75rem; padding:2px; border-radius:3px; max-width:80px;">
+                                <option value="">+ 导入为</option>
+                                <option value="speaker">讲者</option>
+                                <option value="host">主持</option>
+                                <option value="chair">主席</option>
+                                <option value="discussant">讨论嘉宾</option>
+                            </select>
+                            <button onclick="deleteFromGuestLibrary(${idx})" style="background:none; border:none; color:#c62828; cursor:pointer; font-size:1rem; padding:0 4px;">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function addGuestFromLibrary(libIdx, role) {
+            if (!role) return;
+            const g = guestLibrary[libIdx];
+            if (!g) return;
+            
+            let existing = state.people.find(p => p.name === g.name && p.role === role);
+            if (existing) {
+                alert(`${g.name} 已经是当前会议的${ROLE_NAMES[role] || role}了！`);
+                return;
+            }
+            
+            state.people.push({
+                id: generateId(),
+                role: role,
+                name: g.name,
+                bio: g.bio,
+                pinyin: g.pinyin || (window.pinyinPro ? pinyinPro.pinyin(g.name, { toneType: 'none', type: 'array' }).join('') : g.name),
+                avatarUrl: g.avatarUrl
+            });
+            
+            saveState();
+            renderPeopleList();
+            rebuildSlides();
+            alert(`成功将 ${g.name} 导入为当前会议的${ROLE_NAMES[role] || role}！`);
+        }
+
+        function deleteFromGuestLibrary(libIdx) {
+            if (confirm("确定要将这位人员从常用嘉宾库中删除吗？（这不会影响当前已导入会议的人员）")) {
+                guestLibrary.splice(libIdx, 1);
+                saveGuestLibrary();
             }
         }
 
@@ -1240,7 +1408,8 @@
                     canvas.style.backgroundSize = 'cover';
                     canvas.style.backgroundPosition = 'center';
                 } else {
-                    canvas.style.background = 'linear-gradient(180deg, #cde8f8, #e8f5ff, #f2f8ff, #daeeff)';
+                    const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
+                    canvas.style.background = theme.posterGradient;
                 }
                 
                 canvas.innerHTML = `
@@ -1260,7 +1429,8 @@
                     canvas.style.backgroundSize = 'cover';
                     canvas.style.backgroundPosition = 'center';
                 } else {
-                    canvas.style.backgroundColor = 'var(--primary-color)';
+                    const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
+                    canvas.style.background = theme.gradient;
                 }
                 
                 let content = '';
@@ -1288,18 +1458,19 @@
                 } else if (slide.type === 'bio') {
                     let p = state.people.find(x => x.id === slide.personId);
                     if (p) {
-                        let bioItems = p.bio ? p.bio.split(/[;\n；\r]+/) : [];
-                        let bioListHtml = bioItems.map(item => item.trim() ? `<li style="margin-bottom:6px;">${item.trim()}</li>` : '').join('');
+                        let bioItems = (p.bio ? p.bio.split(/[;\n；\r]+/) : []).map(x => x.trim()).filter(Boolean);
+                        const layoutOpts = getBioLayoutOptions(bioItems);
+                        let bioListHtml = bioItems.map(item => `<li style="margin-bottom:${layoutOpts.marginBottom}px;">${item}</li>`).join('');
                         content = `
                             <div style="display:flex; width: 85%; align-items: flex-start; gap: 30px; z-index:2;">
                                 <div style="text-align:center; width: 200px; flex-shrink:0;">
-                                    <img src="${p.avatarUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'><path fill=\'%23ccc\' d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/></svg>'}" style="width:140px; height:140px; border-radius:50%; object-fit:cover; border:4px solid white; box-shadow: 0 6px 15px rgba(0,0,0,0.3); margin-bottom:12px;">
+                                    ${getAvatarHtml(p, 140, '4px solid white', 'margin-bottom:12px; margin-left:auto; margin-right:auto;')}
                                     <h2 style="margin:5px 0; font-size:24px;">${p.name}</h2>
                                     <div style="font-size:14px; color:#bbdefb; font-weight:bold; margin-top:5px;">${ROLE_NAMES[p.role] || ''}</div>
                                 </div>
                                 <div style="flex:1; border-left: 2px solid rgba(255,255,255,0.2); padding-left: 25px; text-align:left;">
                                     <h3 style="margin-top:0; font-size: 18px; color:#bbdefb; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px; margin-bottom:10px;">专家简介</h3>
-                                    <ul style="font-size:14px; line-height:1.6; padding-left: 20px; margin: 0; color:white;">
+                                    <ul style="font-size:${layoutOpts.fontSize}px; line-height:1.5; padding-left: 20px; margin: 0; color:white;">
                                         ${bioListHtml || '<li>暂无详细学术头衔介绍</li>'}
                                     </ul>
                                 </div>
@@ -1314,7 +1485,7 @@
                     
                     let discussantsHtml = discussants.map(p => `
                         <div style="background:rgba(255,255,255,0.15); border-radius:6px; padding:8px 12px; display:flex; align-items:center; gap:10px; min-width: 180px; box-shadow:0 3px 8px rgba(0,0,0,0.1);">
-                            <img src="${p.avatarUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'><path fill=\'%23ccc\' d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/></svg>'}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid white;">
+                            ${getAvatarHtml(p, 36, '2px solid white', 'flex-shrink:0;')}
                             <div style="text-align:left;">
                                 <div style="font-weight:bold; font-size:14px; color:white;">${p.name}</div>
                                 <div style="font-size:11px; opacity:0.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px; color:white;" title="${p.bio || ''}">${p.bio || ''}</div>
@@ -1455,14 +1626,20 @@
                     let bio = hospital;
                     if (title) bio += (bio ? ' ' : '') + title;
                     
-                    state.people.push({
+                    const libMatch = guestLibrary.find(x => x.name === name);
+                    const avatarUrl = libMatch ? libMatch.avatarUrl : null;
+                    const finalBio = libMatch && libMatch.bio ? libMatch.bio : bio;
+
+                    const pObj = {
                         id: generateId(),
                         role: role,
                         name: name,
-                        bio: bio,
+                        bio: finalBio,
                         pinyin: py,
-                        avatarUrl: null
-                    });
+                        avatarUrl: avatarUrl
+                    };
+                    state.people.push(pObj);
+                    syncToGuestLibrary(pObj);
                     successCount++;
                 }
             });
@@ -1721,14 +1898,21 @@ ${rawText}
                     
                     const py = window.pinyinPro ? pinyinPro.pinyin(pObj.name, { toneType: 'none', type: 'array' }).join('') : pObj.name;
                     const id = generateId();
-                    state.people.push({
+                    
+                    const libMatch = guestLibrary.find(x => x.name === pObj.name);
+                    const avatarUrl = libMatch ? libMatch.avatarUrl : null;
+                    const finalBio = pObj.bio || (libMatch ? libMatch.bio : '');
+
+                    const newPerson = {
                         id: id,
                         role: pObj.role || 'discussant',
                         name: pObj.name,
-                        bio: pObj.bio || '',
+                        bio: finalBio,
                         pinyin: py,
-                        avatarUrl: null
-                    });
+                        avatarUrl: avatarUrl
+                    };
+                    state.people.push(newPerson);
+                    syncToGuestLibrary(newPerson);
                     return id;
                 }
 
@@ -1781,10 +1965,26 @@ ${rawText}
 
         // --- Theme Engine ---
         const THEMES = {
-            'blue': { primary: '#0a3a6e', mid: '#1565c0', light: '#1e88e5' },
-            'red': { primary: '#8b0000', mid: '#b22222', light: '#ff4d4d' },
-            'teal': { primary: '#004d40', mid: '#00796b', light: '#4db6ac' },
-            'purple': { primary: '#311b92', mid: '#5e35b1', light: '#b39ddb' }
+            'blue': { 
+                primary: '#0a3a6e', mid: '#1565c0', light: '#1e88e5', 
+                gradient: 'linear-gradient(135deg, #072146 0%, #0a3a6e 50%, #1565c0 100%)',
+                posterGradient: 'linear-gradient(180deg, #e3f2fd 0%, #ffffff 60%, #e3f2fd 100%)'
+            },
+            'red': { 
+                primary: '#8b0000', mid: '#b22222', light: '#ff4d4d', 
+                gradient: 'linear-gradient(135deg, #420000 0%, #750000 50%, #b22222 100%)',
+                posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
+            },
+            'teal': { 
+                primary: '#004d40', mid: '#00796b', light: '#4db6ac', 
+                gradient: 'linear-gradient(135deg, #002d25 0%, #004d40 50%, #00796b 100%)',
+                posterGradient: 'linear-gradient(180deg, #e0f2f1 0%, #ffffff 60%, #e0f2f1 100%)'
+            },
+            'purple': { 
+                primary: '#311b92', mid: '#5e35b1', light: '#b39ddb', 
+                gradient: 'linear-gradient(135deg, #1a0f4a 0%, #311b92 50%, #5e35b1 100%)',
+                posterGradient: 'linear-gradient(180deg, #ede7f6 0%, #ffffff 60%, #ede7f6 100%)'
+            }
         };
 
         function applyTheme(themeKey) {
@@ -1836,7 +2036,8 @@ ${rawText}
                 if (state.meta.posterBg) {
                     slide.background = { data: state.meta.posterBg };
                 } else {
-                    slide.background = { fill: 'e3f2fd' };
+                    const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
+                    slide.background = { fill: theme.light.replace('#', '') };
                 }
                 
                 slide.addText(state.meta.title, {
@@ -1922,6 +2123,13 @@ ${rawText}
                     } else {
                         const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
                         slide.background = { fill: theme.primary.replace('#', '') };
+                        
+                        slide.addShape(pptx.shapes.RIGHT_TRIANGLE, {
+                            x: 5.0, y: 0.0, w: 5.0, h: 5.625,
+                            fill: { color: theme.mid.replace('#', ''), transparency: 75 },
+                            flipH: true,
+                            line: { width: 0 }
+                        });
                     }
                     
                     if (slideObj.type === 'cover') {
@@ -1972,6 +2180,14 @@ ${rawText}
                             x: 1.0, y: 1.6, w: 8.0, h: 1.0,
                             align: 'center', fontSize: 30, bold: true, color: 'ffffff'
                         });
+                        
+                        const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
+                        slide.addShape(pptx.shapes.RECTANGLE, {
+                            x: 3.5, y: 2.6, w: 3.0, h: 0.03,
+                            fill: { color: theme.light.replace('#', '') },
+                            line: { width: 0 }
+                        });
+
                         slide.addText(slideObj.subtitle || '', {
                             x: 1.0, y: 2.8, w: 8.0, h: 0.8,
                             align: 'center', fontSize: 18, color: 'bbdefb'
@@ -1992,10 +2208,16 @@ ${rawText}
                                     x: 1.0, y: 0.8, w: 1.8, h: 1.8
                                 });
                             } else {
-                                slide.addShape(pptx.shapes.RECTANGLE, {
+                                const color = getAvatarColor(p.name).replace('#', '');
+                                slide.addShape(pptx.shapes.OVAL, {
                                     x: 1.0, y: 0.8, w: 1.8, h: 1.8,
-                                    fill: { color: 'cccccc' },
+                                    fill: { color: color },
                                     line: { color: 'ffffff', width: 2 }
+                                });
+                                slide.addText(p.name ? p.name.charAt(0) : '?', {
+                                    x: 1.0, y: 0.8, w: 1.8, h: 1.8,
+                                    align: 'center', valign: 'middle',
+                                    fontSize: 48, bold: true, color: 'ffffff'
                                 });
                             }
                             
@@ -2008,6 +2230,12 @@ ${rawText}
                                 align: 'center', fontSize: 12, color: 'bbdefb', bold: true
                             });
 
+                            slide.addShape(pptx.shapes.RECTANGLE, {
+                                x: 3.2, y: 0.8, w: 0.02, h: 3.8,
+                                fill: { color: 'ffffff', transparency: 70 },
+                                line: { width: 0 }
+                            });
+
                             slide.addText('专家简介', {
                                 x: 3.5, y: 0.8, w: 5.7, h: 0.4,
                                 fontSize: 16, bold: true, color: 'bbdefb'
@@ -2016,15 +2244,20 @@ ${rawText}
                             let bioItems = p.bio ? p.bio.split(/[;\n；\r]+/) : [];
                             let cleanBioItems = bioItems.map(item => item.trim()).filter(Boolean);
                             
-                            let bulletText = cleanBioItems.map(item => ({ text: item, options: { bullet: true, color: 'ffffff', fontSize: 12 } }));
+                            const layoutOpts = getBioLayoutOptions(cleanBioItems);
+                            let bulletText = cleanBioItems.map(item => ({ 
+                                text: item, 
+                                options: { bullet: true, color: 'ffffff', fontSize: Math.round(layoutOpts.fontSize * 0.9) }
+                            }));
                             if (bulletText.length > 0) {
                                 slide.addText(bulletText, {
-                                    x: 3.5, y: 1.3, w: 5.7, h: 3.5,
-                                    align: 'left', lineSpacing: 22
+                                    x: 3.5, y: 1.3, w: 5.5, h: 3.3,
+                                    align: 'left', 
+                                    lineSpacing: Math.round(layoutOpts.lineSpacing * 1.1)
                                 });
                             } else {
                                 slide.addText('暂无详细学术头衔介绍', {
-                                    x: 3.5, y: 1.3, w: 5.7, h: 1.0,
+                                    x: 3.5, y: 1.3, w: 5.5, h: 1.0,
                                     color: 'ffffff', fontSize: 12
                                 });
                             }
@@ -2079,6 +2312,13 @@ ${rawText}
                                 rectRadius: 0.05
                             });
                             
+                            const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
+                            slide.addShape(pptx.shapes.RECTANGLE, {
+                                x: x, y: y, w: cardW, h: 0.04,
+                                fill: { color: theme.light.replace('#', '') },
+                                line: { width: 0 }
+                            });
+                            
                             if (p.avatarUrl) {
                                 slide.addImage({
                                     data: p.avatarUrl,
@@ -2122,6 +2362,7 @@ ${rawText}
             rebuildSlides();
             renderAgendaList();
             renderPeopleList();
+            renderGuestLibraryList();
             updateSaveStatus();
             switchSlide(0);
         };
