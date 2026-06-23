@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>会议议程海报 & 串场工具 v1.1</title>
+    <title>会议议程海报 & 串场工具 v1.2</title>
+    <script src="https://unpkg.com/pinyin-pro"></script>
     <style>
         :root {
             --primary-color: #0a3a6e;
@@ -224,6 +225,23 @@
             margin-top: 10px;
         }
 
+        /* People Items */
+        .person-group-title { margin: 15px 0 5px 0; font-size: 0.9rem; color: var(--primary-color); border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+        .person-item { display: flex; align-items: center; background: #fff; border: 1px solid #eee; border-radius: 4px; padding: 5px; margin-bottom: 5px; }
+        .person-avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: #eee; margin-right: 10px; }
+        .person-info { flex: 1; overflow: hidden; }
+        .person-name { font-weight: bold; font-size: 0.9rem; }
+        .person-bio { font-size: 0.75rem; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+        .person-actions button { background: none; border: none; cursor: pointer; color: #999; padding: 2px 5px; }
+        .person-actions button:hover { color: #d32f2f; }
+        
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 400px; max-width: 90%; }
+        .modal-header { display: flex; justify-content: space-between; margin-bottom: 15px; }
+        .modal-header h3 { margin: 0; }
+
         /* Right Panel */
         .right-panel {
             flex: 1;
@@ -351,7 +369,7 @@
 
     <!-- Top Toolbar -->
     <div class="toolbar">
-        <div class="toolbar-title">📋 会议议程海报 & 串场工具 v1.1</div>
+        <div class="toolbar-title">📋 会议议程海报 & 串场工具 v1.2</div>
         <div class="toolbar-actions">
             <span id="save-status" style="font-size: 0.9rem; margin-right: 15px; opacity: 0.8;"></span>
             <button onclick="alert('AI设置暂未实现')">⚙️ AI设置</button>
@@ -415,9 +433,13 @@
 
             <!-- Tab: People -->
             <div id="tab-people" class="tab-content">
-                <h3>人员管理</h3>
-                <p style="color:#888; font-size:0.8rem;">（主席、讲者、主持、嘉宾管理，拼音排序在 Phase 2 实现）</p>
-                <button style="width:100%; padding:10px; margin-top:10px;">+ 添加人员</button>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                    <h3 style="margin:0;">人员管理</h3>
+                    <button onclick="openPersonModal()" style="padding:4px 8px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer;">+ 添加人员</button>
+                </div>
+                <div id="people-list-container">
+                    <!-- People groups rendered here -->
+                </div>
             </div>
 
             <!-- Tab: Template -->
@@ -461,6 +483,39 @@
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- Add Person Modal -->
+    <div class="modal" id="person-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>添加/编辑人员</h3>
+                <button onclick="closePersonModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">×</button>
+            </div>
+            <div class="form-group">
+                <label>身份角色</label>
+                <select id="modal-role" class="form-control">
+                    <option value="chair">大会主席</option>
+                    <option value="speaker">讲者</option>
+                    <option value="host">主持</option>
+                    <option value="discussant">讨论嘉宾</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>姓名</label>
+                <input type="text" id="modal-name" class="form-control" placeholder="输入姓名">
+            </div>
+            <div class="form-group">
+                <label>个人简介</label>
+                <textarea id="modal-bio" class="form-control" rows="3" placeholder="输入个人简介..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>上传头像 (自动裁剪)</label>
+                <input type="file" id="modal-avatar" accept="image/*" class="form-control">
+                <canvas id="avatar-preview-canvas" style="display:none; margin-top:10px; width:80px; height:80px; border-radius:50%; border:1px solid #ccc;"></canvas>
+            </div>
+            <button onclick="savePerson()" style="width:100%; padding:10px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer;">保存人员</button>
         </div>
     </div>
 
@@ -644,6 +699,162 @@
             saveState();
         }
 
+        // --- People Module ---
+        let editingPersonId = null;
+        let currentAvatarBase64 = null;
+
+        const ROLE_NAMES = {
+            'chair': '大会主席',
+            'speaker': '讲者',
+            'host': '主持',
+            'discussant': '讨论嘉宾'
+        };
+
+        function openPersonModal(id = null) {
+            document.getElementById('person-modal').classList.add('active');
+            const canvas = document.getElementById('avatar-preview-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvas.style.display = 'none';
+
+            if (id) {
+                editingPersonId = id;
+                const p = state.people.find(x => x.id === id);
+                document.getElementById('modal-role').value = p.role;
+                document.getElementById('modal-name').value = p.name;
+                document.getElementById('modal-bio').value = p.bio || '';
+                currentAvatarBase64 = p.avatarUrl || null;
+                if (currentAvatarBase64) {
+                    const img = new Image();
+                    img.onload = () => {
+                        canvas.width = 160; canvas.height = 160;
+                        ctx.drawImage(img, 0, 0, 160, 160);
+                        canvas.style.display = 'block';
+                    };
+                    img.src = currentAvatarBase64;
+                }
+            } else {
+                editingPersonId = null;
+                document.getElementById('modal-role').value = 'chair';
+                document.getElementById('modal-name').value = '';
+                document.getElementById('modal-bio').value = '';
+                document.getElementById('modal-avatar').value = '';
+                currentAvatarBase64 = null;
+            }
+        }
+
+        function closePersonModal() {
+            document.getElementById('person-modal').classList.remove('active');
+        }
+
+        // Handle Avatar File Upload and Auto Cropping
+        document.getElementById('modal-avatar').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.getElementById('avatar-preview-canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Smart Crop: Center Square
+                    const size = Math.min(img.width, img.height);
+                    const sx = (img.width - size) / 2;
+                    const sy = (img.height - size) / 2;
+                    
+                    canvas.width = 160;
+                    canvas.height = 160;
+                    ctx.drawImage(img, sx, sy, size, size, 0, 0, 160, 160);
+                    
+                    currentAvatarBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                    canvas.style.display = 'block';
+                }
+                img.src = evt.target.result;
+            }
+            reader.readAsDataURL(file);
+        });
+
+        function savePerson() {
+            const role = document.getElementById('modal-role').value;
+            const name = document.getElementById('modal-name').value.trim();
+            const bio = document.getElementById('modal-bio').value.trim();
+            if(!name) { alert("姓名不能为空"); return; }
+            
+            // Pinyin generation for sorting (using pinyin-pro from CDN)
+            const py = window.pinyinPro ? pinyinPro.pinyin(name, { toneType: 'none', type: 'array' }).join('') : name;
+
+            const pData = {
+                id: editingPersonId || generateId(),
+                role: role,
+                name: name,
+                bio: bio,
+                pinyin: py,
+                avatarUrl: currentAvatarBase64
+            };
+
+            if (editingPersonId) {
+                const idx = state.people.findIndex(x => x.id === editingPersonId);
+                if(idx !== -1) state.people[idx] = pData;
+            } else {
+                state.people.push(pData);
+            }
+            
+            saveState();
+            renderPeopleList();
+            closePersonModal();
+        }
+
+        function deletePerson(id) {
+            if(confirm("确定要删除这位人员吗？")) {
+                state.people = state.people.filter(x => x.id !== id);
+                saveState();
+                renderPeopleList();
+            }
+        }
+
+        function renderPeopleList() {
+            const container = document.getElementById('people-list-container');
+            container.innerHTML = '';
+            
+            const rolesOrder = ['chair', 'speaker', 'host', 'discussant'];
+            
+            rolesOrder.forEach(role => {
+                let rolePeople = state.people.filter(p => p.role === role);
+                if (rolePeople.length === 0) return;
+                
+                // Sort by Pinyin for discussants
+                if (role === 'discussant') {
+                    rolePeople.sort((a, b) => a.pinyin.localeCompare(b.pinyin));
+                }
+
+                const groupEl = document.createElement('div');
+                groupEl.innerHTML = `<h4 class="person-group-title">${ROLE_NAMES[role]} (${rolePeople.length}人)</h4>`;
+                
+                rolePeople.forEach(p => {
+                    const item = document.createElement('div');
+                    item.className = 'person-item';
+                    item.innerHTML = `
+                        <img src="${p.avatarUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\'><path fill=\'%23ccc\' d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/></svg>'}" class="person-avatar">
+                        <div class="person-info">
+                            <div class="person-name">${p.name}</div>
+                            <div class="person-bio" title="${p.bio || ''}">${p.bio || '<span style="color:#ccc">无简介</span>'}</div>
+                        </div>
+                        <div class="person-actions">
+                            <button onclick="openPersonModal('${p.id}')" title="编辑">✏️</button>
+                            <button onclick="deletePerson('${p.id}')" title="删除">×</button>
+                        </div>
+                    `;
+                    groupEl.appendChild(item);
+                });
+                
+                container.appendChild(groupEl);
+            });
+            
+            // Re-render slide 3 if active
+            if(currentSlide === 3) switchSlide(3);
+        }
+
         // --- Drag and Drop Logic ---
         let dragStartIndex = -1;
 
@@ -765,6 +976,7 @@
             initForms();
             calculateAgendaTimes();
             renderAgendaList();
+            renderPeopleList();
             updateSaveStatus();
             switchSlide(0);
         };
