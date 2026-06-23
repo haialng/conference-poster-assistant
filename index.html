@@ -445,8 +445,22 @@
 
             <!-- Tab: Template -->
             <div id="tab-template" class="tab-content">
-                <h3>模板设置</h3>
-                <p style="color:#888; font-size:0.8rem;">（模板切换、颜色自定义等功能在后续版本实现）</p>
+                <h3 style="margin-top:0;">配色方案</h3>
+                <p style="color:#888; font-size:0.8rem; margin-bottom: 20px;">选择一个契合会议主题的配色方案：</p>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <button class="theme-select-btn" onclick="applyTheme('blue')" style="display:flex; align-items:center; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; background:white; cursor:pointer; font-weight:bold;">
+                        <span style="width:20px; height:20px; border-radius:50%; background:#0a3a6e; margin-right:10px; border:1px solid #ddd;"></span> 学术深蓝 (默认)
+                    </button>
+                    <button class="theme-select-btn" onclick="applyTheme('red')" style="display:flex; align-items:center; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; background:white; cursor:pointer; font-weight:bold;">
+                        <span style="width:20px; height:20px; border-radius:50%; background:#8b0000; margin-right:10px; border:1px solid #ddd;"></span> 典雅朱红
+                    </button>
+                    <button class="theme-select-btn" onclick="applyTheme('teal')" style="display:flex; align-items:center; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; background:white; cursor:pointer; font-weight:bold;">
+                        <span style="width:20px; height:20px; border-radius:50%; background:#004d40; margin-right:10px; border:1px solid #ddd;"></span> 医疗松石绿
+                    </button>
+                    <button class="theme-select-btn" onclick="applyTheme('purple')" style="display:flex; align-items:center; width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; background:white; cursor:pointer; font-weight:bold;">
+                        <span style="width:20px; height:20px; border-radius:50%; background:#311b92; margin-right:10px; border:1px solid #ddd;"></span> 庄重华紫
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -511,6 +525,7 @@
             <div class="form-group">
                 <label>个人简介</label>
                 <textarea id="modal-bio" class="form-control" rows="3" placeholder="输入个人简介..."></textarea>
+                <button type="button" onclick="polishBioWithAI(event)" style="margin-top: 5px; padding: 4px 8px; font-size: 0.8rem; background: var(--bg-color); border: 1px solid #ccc; border-radius: 4px; cursor: pointer; color: var(--mid-blue);">✨ AI 润色简介 (缩短至适合排版的一句话)</button>
             </div>
             <div class="form-group">
                 <label>上传头像 (自动裁剪)</label>
@@ -529,6 +544,15 @@
                 <button onclick="closeAIModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">×</button>
             </div>
             <p style="font-size:0.8rem; color:#666; margin-bottom:15px;">配置您的 AI 接口以启用智能功能（支持 OpenAI 等兼容格式）。</p>
+            <div class="form-group">
+                <label>快捷填报服务商</label>
+                <select onchange="applyAIPreset(this.value)" class="form-control" style="background:#f9f9f9;">
+                    <option value="">-- 自定义 / 手动填写 --</option>
+                    <option value="deepseek">DeepSeek (官方API)</option>
+                    <option value="openai">OpenAI (官方API)</option>
+                    <option value="kimi">Moonshot (Kimi)</option>
+                </select>
+            </div>
             <div class="form-group">
                 <label>API Base URL</label>
                 <input type="text" id="ai-baseurl" class="form-control" placeholder="例如: https://api.openai.com/v1">
@@ -621,6 +645,7 @@
             document.getElementById('input-date').value = state.meta.date;
             document.getElementById('input-time').value = state.meta.startTime;
             document.getElementById('input-script').value = state.meta.script || '';
+            applyTheme(state.template || 'blue');
             syncToCanvas();
         }
 
@@ -1034,6 +1059,21 @@
         // --- AI Module ---
         let aiConfig = JSON.parse(localStorage.getItem('conf_ai_config')) || { baseUrl: '', apiKey: '', model: '' };
 
+        function applyAIPreset(val) {
+            const baseUrlInput = document.getElementById('ai-baseurl');
+            const modelInput = document.getElementById('ai-model');
+            if (val === 'deepseek') {
+                baseUrlInput.value = 'https://api.deepseek.com/v1';
+                modelInput.value = 'deepseek-chat';
+            } else if (val === 'openai') {
+                baseUrlInput.value = 'https://api.openai.com/v1';
+                modelInput.value = 'gpt-3.5-turbo';
+            } else if (val === 'kimi') {
+                baseUrlInput.value = 'https://api.moonshot.cn/v1';
+                modelInput.value = 'moonshot-v1-8k';
+            }
+        }
+
         function openAIModal() {
             document.getElementById('ai-modal').classList.add('active');
             document.getElementById('ai-baseurl').value = aiConfig.baseUrl;
@@ -1099,6 +1139,63 @@
                 updateMeta('script', res);
                 if(currentSlide === 4) switchSlide(4);
             }
+        }
+
+        async function polishBioWithAI(e) {
+            const bioTextarea = document.getElementById('modal-bio');
+            const rawBio = bioTextarea.value.trim();
+            if (!rawBio) {
+                alert("请输入需要润色的个人简介！");
+                return;
+            }
+            const btn = e.target;
+            btn.innerText = "⏳ 正在润色...";
+            btn.disabled = true;
+
+            const prompt = `你是一个医学学术会议策划。请将以下嘉宾的个人简介，润色并精简为适合在海报或幻灯片嘉宾卡片上展示的、不超过40字的一句话职业简介（例如：某某医院某某科室主任医师，专注于某某疾病研究）。\n\n原简介：${rawBio}\n\n润色后简介：`;
+            
+            const res = await callAI(prompt);
+            btn.innerText = "✨ AI 润色简介 (缩短至适合排版的一句话)";
+            btn.disabled = false;
+            if (res) {
+                bioTextarea.value = res.replace(/["'“”]/g, '').trim();
+            }
+        }
+
+        // --- Theme Engine ---
+        const THEMES = {
+            'blue': { primary: '#0a3a6e', mid: '#1565c0', light: '#1e88e5' },
+            'red': { primary: '#8b0000', mid: '#b22222', light: '#ff4d4d' },
+            'teal': { primary: '#004d40', mid: '#00796b', light: '#4db6ac' },
+            'purple': { primary: '#311b92', mid: '#5e35b1', light: '#b39ddb' }
+        };
+
+        function applyTheme(themeKey) {
+            state.template = themeKey;
+            const theme = THEMES[themeKey] || THEMES['blue'];
+            document.documentElement.style.setProperty('--primary-color', theme.primary);
+            document.documentElement.style.setProperty('--mid-blue', theme.mid);
+            document.documentElement.style.setProperty('--light-blue', theme.light);
+            
+            // Re-render components that might have color-specific inline styles
+            renderPeopleList();
+            renderPosterAgendaPreview();
+            if (currentSlide === 2) renderSlideAgendaPreview();
+            if (currentSlide === 3) renderSlidePeoplePreview();
+            
+            // Highlight selected theme button in UI
+            const btns = document.querySelectorAll('.theme-select-btn');
+            btns.forEach(btn => {
+                if (btn.getAttribute('onclick').includes(`'${themeKey}'`)) {
+                    btn.style.borderColor = 'var(--light-blue)';
+                    btn.style.boxShadow = '0 0 5px rgba(30,136,229,0.3)';
+                } else {
+                    btn.style.borderColor = '#ccc';
+                    btn.style.boxShadow = 'none';
+                }
+            });
+            
+            saveState();
         }
 
         // --- Export Module ---
