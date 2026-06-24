@@ -1555,38 +1555,253 @@
             return parts.join(' | ');
         }
 
+        let canvasDragStartIndex = -1;
+
+        function handleCanvasDragStart(e) {
+            canvasDragStartIndex = parseInt(this.dataset.index);
+            if (e.dataTransfer) {
+                e.dataTransfer.effectAllowed = 'move';
+            }
+            this.style.opacity = '0.5';
+        }
+
+        function handleCanvasDragOver(e) {
+            e.preventDefault();
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = 'move';
+            }
+            return false;
+        }
+
+        function handleCanvasDrop(e) {
+            e.stopPropagation();
+            const targetIndex = parseInt(this.dataset.index);
+            if (canvasDragStartIndex !== targetIndex && canvasDragStartIndex !== -1) {
+                const draggedItem = state.agenda[canvasDragStartIndex];
+                state.agenda.splice(canvasDragStartIndex, 1);
+                state.agenda.splice(targetIndex, 0, draggedItem);
+                
+                saveState();
+                renderAgendaList();
+                rebuildSlides();
+                switchSlide(currentSlide);
+            }
+            return false;
+        }
+
+        function handleCanvasDragEnd(e) {
+            this.style.opacity = '1';
+            canvasDragStartIndex = -1;
+        }
+
+        function syncAgendaCellFromCanvas(agendaId, field, newValue) {
+            newValue = newValue.trim().replace(/\n/g, ' ');
+            const item = state.agenda.find(a => a.id === agendaId);
+            if (!item) return;
+            
+            if (field === 'time') {
+                const timeMatch = newValue.match(/(\d{1,2})[：:](\d{2})\s*[-~－—]\s*(\d{1,2})[：:](\d{2})/);
+                if (timeMatch) {
+                    const startH = parseInt(timeMatch[1]);
+                    const startM = parseInt(timeMatch[2]);
+                    const endH = parseInt(timeMatch[3]);
+                    const endM = parseInt(timeMatch[4]);
+                    
+                    const firstItem = state.agenda[0];
+                    if (item.id === firstItem.id) {
+                        state.meta.startTime = `${startH.toString().padStart(2, '0')}:${startM.toString().padStart(2, '0')}`;
+                        const startTimeInput = document.getElementById('meta-startTime');
+                        if (startTimeInput) startTimeInput.value = state.meta.startTime;
+                    }
+                    
+                    const startMin = startH * 60 + startM;
+                    let endMin = endH * 60 + endM;
+                    if (endMin < startMin) {
+                        endMin += 24 * 60;
+                    }
+                    item.duration = Math.max(1, endMin - startMin);
+                }
+                calculateAgendaTimes();
+                renderAgendaList();
+            } else if (field === 'title') {
+                item.title = newValue;
+                const input = document.querySelector(`.agenda-item[data-index] input[oninput*="${agendaId}"][oninput*="title"]`);
+                if (input) input.value = newValue;
+            } else if (field === 'speaker') {
+                if (item.type === 'discussion') {
+                    if (!newValue || newValue === '--' || newValue === '无') {
+                        item.discussantIds = [];
+                    } else {
+                        const names = newValue.split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean);
+                        let newIds = [];
+                        names.forEach(name => {
+                            let person = state.people.find(p => p.name === name && p.role === 'discussant');
+                            if (!person) {
+                                const py = window.pinyinPro ? pinyinPro.pinyin(name, { toneType: 'none', type: 'array' }).join('') : name;
+                                const newId = generateId();
+                                person = {
+                                    id: newId,
+                                    role: 'discussant',
+                                    name: name,
+                                    bio: '',
+                                    pinyin: py,
+                                    avatarUrl: null
+                                };
+                                state.people.push(person);
+                                syncToGuestLibrary(person);
+                            }
+                            newIds.push(person.id);
+                        });
+                        item.discussantIds = newIds;
+                        renderPeopleList();
+                    }
+                } else {
+                    if (!newValue || newValue === '--' || newValue === '无') {
+                        item.speakerId = '';
+                    } else {
+                        let person = state.people.find(p => p.name === newValue && (p.role === 'speaker' || p.role === 'chair'));
+                        if (!person) {
+                            const py = window.pinyinPro ? pinyinPro.pinyin(newValue, { toneType: 'none', type: 'array' }).join('') : newValue;
+                            const newId = generateId();
+                            person = {
+                                id: newId,
+                                role: 'speaker',
+                                name: newValue,
+                                bio: '',
+                                pinyin: py,
+                                avatarUrl: null
+                            };
+                            state.people.push(person);
+                            syncToGuestLibrary(person);
+                            renderPeopleList();
+                        }
+                        item.speakerId = person.id;
+                    }
+                }
+            } else if (field === 'host') {
+                if (!newValue || newValue === '--' || newValue === '无') {
+                    item.hostId = '';
+                } else {
+                    let person = state.people.find(p => p.name === newValue && (p.role === 'host' || p.role === 'chair'));
+                    if (!person) {
+                        const py = window.pinyinPro ? pinyinPro.pinyin(newValue, { toneType: 'none', type: 'array' }).join('') : newValue;
+                        const newId = generateId();
+                        person = {
+                            id: newId,
+                            role: 'host',
+                            name: newValue,
+                            bio: '',
+                            pinyin: py,
+                            avatarUrl: null
+                        };
+                        state.people.push(person);
+                        syncToGuestLibrary(person);
+                        renderPeopleList();
+                    }
+                    item.hostId = person.id;
+                }
+            }
+            
+            saveState();
+            rebuildSlides();
+        }
+
         function renderPosterAgendaPreview() {
             const el = document.getElementById('poster-agenda-preview');
             if (!el) return;
-            let html = '<div style="text-align:center; font-weight:bold; margin-bottom:10px; color:var(--primary-color);">会议日程</div>';
-            state.agenda.forEach(a => {
-                const peopleInfo = formatAgendaItemPeople(a);
-                html += `<div style="margin-bottom:8px; border-bottom:1px solid rgba(0,0,0,0.08); padding-bottom:4px; font-size:12px;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <span style="font-weight:bold; color:var(--primary-color);">${a.startTimeStr} - ${a.endTimeStr}</span>
-                                <span style="font-weight:bold; text-align:right; flex:1; padding-left:10px;">${a.title}</span>
-                            </div>
-                            ${peopleInfo ? `<div style="text-align:right; color:#666; font-size:11px; margin-top:2px;">${peopleInfo}</div>` : ''}
-                         </div>`;
+            
+            let html = `
+                <div style="text-align:center; font-weight:bold; margin-bottom:12px; color:var(--primary-color); font-size: 16px;">会议日程</div>
+                <table style="width:100%; border-collapse:collapse; text-align:left; font-size:11px; color:#333; table-layout: fixed;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--primary-color); color: var(--primary-color); font-weight: bold;">
+                            <th style="padding: 4px; width: 22%;">时间</th>
+                            <th style="padding: 4px; width: 44%;">内容</th>
+                            <th style="padding: 4px; width: 17%;">讲者</th>
+                            <th style="padding: 4px; width: 17%;">主持</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            state.agenda.forEach((a, index) => {
+                const speaker = state.people.find(p => p.id === a.speakerId);
+                const host = state.people.find(p => p.id === a.hostId);
+                
+                let speakerName = speaker ? speaker.name : '';
+                if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
+                    const names = a.discussantIds.map(id => {
+                        const p = state.people.find(x => x.id === id);
+                        return p ? p.name : '';
+                    }).filter(Boolean);
+                    speakerName = names.join('、');
+                }
+                
+                let hostName = host ? host.name : '';
+                
+                html += `
+                    <tr draggable="true" data-index="${index}" ondragstart="handleCanvasDragStart.call(this, event)" ondragover="handleCanvasDragOver.call(this, event)" ondrop="handleCanvasDrop.call(this, event)" ondragend="handleCanvasDragEnd.call(this, event)" style="border-bottom: 1px solid rgba(0,0,0,0.08); cursor: grab;">
+                        <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'time', this.innerText)" style="padding: 6px 4px; font-weight: bold; color: var(--primary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.startTimeStr}-${a.endTimeStr}</td>
+                        <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'title', this.innerText)" style="padding: 6px 4px; font-weight: bold; overflow: hidden; text-overflow: ellipsis;">${a.title}</td>
+                        <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'speaker', this.innerText)" style="padding: 6px 4px; color: #555; overflow: hidden; text-overflow: ellipsis;">${speakerName || '--'}</td>
+                        <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'host', this.innerText)" style="padding: 6px 4px; color: #555; overflow: hidden; text-overflow: ellipsis;">${hostName || '--'}</td>
+                    </tr>
+                `;
             });
+            
+            html += `
+                    </tbody>
+                </table>
+            `;
             el.innerHTML = html;
         }
 
         function renderSlideAgendaPreview() {
             const el = document.getElementById('slide-agenda-preview');
             if (!el) return;
-            let html = '<table style="width:100%; border-collapse:collapse; color:white; text-align:left; font-size:15px;">';
-            state.agenda.forEach(a => {
-                const peopleInfo = formatAgendaItemPeople(a);
-                html += `<tr>
-                            <td style="padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.2); width:130px; font-weight:bold; vertical-align:top;">${a.startTimeStr} - ${a.endTimeStr}</td>
-                            <td style="padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.2); vertical-align:top;">
-                                <div style="font-weight:bold; margin-bottom:2px;">${a.title}</div>
-                                ${peopleInfo ? `<div style="font-size:12px; color:#bbdefb;">${peopleInfo}</div>` : ''}
-                            </td>
-                         </tr>`;
+            
+            let html = `
+                <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; color:white; table-layout: fixed; margin-top: 10px;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid rgba(255,255,255,0.4); color: #bbdefb; font-weight: bold;">
+                            <th style="padding: 8px 4px; width: 22%;">时间</th>
+                            <th style="padding: 8px 4px; width: 44%;">内容</th>
+                            <th style="padding: 8px 4px; width: 17%;">讲者</th>
+                            <th style="padding: 8px 4px; width: 17%;">主持</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            state.agenda.forEach((a, index) => {
+                const speaker = state.people.find(p => p.id === a.speakerId);
+                const host = state.people.find(p => p.id === a.hostId);
+                
+                let speakerName = speaker ? speaker.name : '';
+                if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
+                    const names = a.discussantIds.map(id => {
+                        const p = state.people.find(x => x.id === id);
+                        return p ? p.name : '';
+                    }).filter(Boolean);
+                    speakerName = names.join('、');
+                }
+                
+                let hostName = host ? host.name : '';
+                
+                html += `
+                    <tr draggable="true" data-index="${index}" ondragstart="handleCanvasDragStart.call(this, event)" ondragover="handleCanvasDragOver.call(this, event)" ondrop="handleCanvasDrop.call(this, event)" ondragend="handleCanvasDragEnd.call(this, event)" style="border-bottom: 1px solid rgba(255,255,255,0.2); cursor: grab;">
+                        <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'time', this.innerText)" style="padding: 8px 4px; font-weight: bold; color: #bbdefb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.startTimeStr}-${a.endTimeStr}</td>
+                        <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'title', this.innerText)" style="padding: 8px 4px; font-weight: bold; overflow: hidden; text-overflow: ellipsis;">${a.title}</td>
+                        <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'speaker', this.innerText)" style="padding: 8px 4px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis;">${speakerName || '--'}</td>
+                        <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'host', this.innerText)" style="padding: 8px 4px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis;">${hostName || '--'}</td>
+                    </tr>
+                `;
             });
-            html += '</table>';
+            
+            html += `
+                    </tbody>
+                </table>
+            `;
             el.innerHTML = html;
         }
 
@@ -1973,7 +2188,7 @@ ${rawText}
             'red': { 
                 primary: '#8b0000', mid: '#b22222', light: '#ff4d4d', 
                 gradient: 'linear-gradient(135deg, #420000 0%, #750000 50%, #b22222 100%)',
-                posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
+posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
             },
             'teal': { 
                 primary: '#004d40', mid: '#00796b', light: '#4db6ac', 
@@ -2062,30 +2277,45 @@ ${rawText}
                     align: 'center', fontSize: 12, bold: true, color: '0a3a6e'
                 });
                 
-                let yPos = 3.5;
+                let rows = [];
+                const primaryColorHex = (THEMES[state.template || 'blue'] || THEMES['blue']).primary.replace('#', '');
+                
+                rows.push([
+                    { text: '时间', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei' } },
+                    { text: '内容', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei' } },
+                    { text: '讲者', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei' } },
+                    { text: '主持', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei' } }
+                ]);
+                
                 state.agenda.forEach(a => {
-                    const peopleInfo = formatAgendaItemPeople(a);
-                    const itemH = peopleInfo ? 0.42 : 0.28;
-                    if (yPos + itemH > 9.4) return;
+                    const speaker = state.people.find(p => p.id === a.speakerId);
+                    const host = state.people.find(p => p.id === a.hostId);
                     
-                    slide.addText(a.startTimeStr + ' - ' + a.endTimeStr, {
-                        x: 0.5, y: yPos, w: 1.1, h: 0.2,
-                        fontSize: 8, bold: true, color: '0a3a6e'
-                    });
-                    
-                    slide.addText(a.title, {
-                        x: 1.7, y: yPos, w: 2.4, h: 0.2,
-                        fontSize: 8, bold: true, color: '333333'
-                    });
-                    
-                    if (peopleInfo) {
-                        slide.addText(peopleInfo, {
-                            x: 1.7, y: yPos + 0.18, w: 2.4, h: 0.18,
-                            fontSize: 7, color: '666666'
-                        });
+                    let speakerName = speaker ? speaker.name : '';
+                    if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
+                        const names = a.discussantIds.map(id => {
+                            const p = state.people.find(x => x.id === id);
+                            return p ? p.name : '';
+                        }).filter(Boolean);
+                        speakerName = names.join('、');
                     }
                     
-                    yPos += itemH + 0.05;
+                    let hostName = host ? host.name : '';
+                    
+                    rows.push([
+                        { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: primaryColorHex, fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
+                        { text: a.title, options: { bold: true, color: '333333', fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
+                        { text: speakerName || '--', options: { color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
+                        { text: hostName || '--', options: { color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei' } }
+                    ]);
+                });
+                
+                slide.addTable(rows, {
+                    x: 0.39, y: 3.4, w: 3.8,
+                    colW: [0.85, 1.65, 0.65, 0.65],
+                    fontSize: 7.5,
+                    border: { type: 'solid', color: 'dddddd', size: 1 },
+                    valign: 'middle'
                 });
 
                 await pptx.writeFile({ fileName: state.meta.title + '_会议海报.pptx' });
@@ -2153,25 +2383,40 @@ ${rawText}
                         });
                         
                         let rows = [];
+                        rows.push([
+                            { text: '时间', options: { bold: true, color: 'bbdefb', fontSize: 13 } },
+                            { text: '内容', options: { bold: true, color: 'bbdefb', fontSize: 13 } },
+                            { text: '讲者', options: { bold: true, color: 'bbdefb', fontSize: 13 } },
+                            { text: '主持', options: { bold: true, color: 'bbdefb', fontSize: 13 } }
+                        ]);
+                        
                         state.agenda.forEach(a => {
-                            const peopleInfo = formatAgendaItemPeople(a);
-                            let textArr = [
-                                { text: a.title, options: { bold: true, color: 'ffffff', fontSize: 13 } }
-                            ];
-                            if (peopleInfo) {
-                                textArr.push({ text: '\n' + peopleInfo, options: { color: 'bbdefb', fontSize: 11 } });
+                            const speaker = state.people.find(p => p.id === a.speakerId);
+                            const host = state.people.find(p => p.id === a.hostId);
+                            
+                            let speakerName = speaker ? speaker.name : '';
+                            if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
+                                const names = a.discussantIds.map(id => {
+                                    const p = state.people.find(x => x.id === id);
+                                    return p ? p.name : '';
+                                }).filter(Boolean);
+                                speakerName = names.join('、');
                             }
+                            
+                            let hostName = host ? host.name : '';
+                            
                             rows.push([
-                                { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: 'ffffff', fontSize: 13 } },
-                                textArr
+                                { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: 'ffffff', fontSize: 11 } },
+                                { text: a.title, options: { bold: true, color: 'ffffff', fontSize: 11 } },
+                                { text: speakerName || '--', options: { color: 'ffffff', fontSize: 11 } },
+                                { text: hostName || '--', options: { color: 'ffffff', fontSize: 11 } }
                             ]);
                         });
                         
                         slide.addTable(rows, {
                             x: 1.0, y: 1.3, w: 8.0,
-                            colW: [2.5, 5.5],
-                            rowH: 0.45,
-                            fontSize: 13,
+                            colW: [1.8, 3.4, 1.4, 1.4],
+                            fontSize: 11,
                             border: { type: 'solid', color: 'ffffff', size: 1 }
                         });
                     }
