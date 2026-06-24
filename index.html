@@ -390,11 +390,12 @@
         
         <!-- Left Panel -->
         <div class="left-panel">
-            <div class="tabs">
+            <div class="tabs" style="flex-wrap: wrap; gap: 4px 0;">
                 <button class="tab-btn active" onclick="switchTab('tab-basic')">基本</button>
                 <button class="tab-btn" onclick="switchTab('tab-agenda')">议程</button>
                 <button class="tab-btn" onclick="switchTab('tab-people')">人员</button>
                 <button class="tab-btn" onclick="switchTab('tab-template')">模板</button>
+                <button class="tab-btn" onclick="switchTab('tab-ai-chat')" style="background: linear-gradient(135deg, #f3e5f5, #e1bee7); color: #7b1fa2; font-weight: bold; border: 1px solid #ce93d8;">🔮 AI 智能设计</button>
             </div>
 
             <!-- Tab: Basic Info -->
@@ -516,18 +517,80 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Tab: AI Chat Designer -->
+            <div id="tab-ai-chat" class="tab-content" style="display: none; flex-direction: column; height: calc(100vh - 120px); box-sizing: border-box;">
+                <div style="background: #f3e5f5; border: 1px solid #e1bee7; border-radius: 6px; padding: 10px; margin-bottom: 12px; box-sizing: border-box;">
+                    <div style="font-size: 0.8rem; font-weight: bold; color: #7b1fa2; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                        <span>⚙️ AI API 配置</span>
+                        <a href="javascript:void(0)" onclick="toggleAiConfig()" id="toggle-ai-config-link" style="font-size: 0.75rem; color: #ab47bc; text-decoration: none;">[展开/收起]</a>
+                    </div>
+                    <div id="ai-config-fields" style="display: flex; flex-direction: column; gap: 6px;">
+                        <div style="display: flex; gap: 6px;">
+                            <select id="ai-provider" class="form-control" style="flex: 1; font-size: 0.8rem; padding: 4px;" onchange="updateAiProvider()">
+                                <option value="gemini">Gemini API</option>
+                                <option value="openai">OpenAI API</option>
+                            </select>
+                            <select id="ai-model" class="form-control" style="flex: 1.5; font-size: 0.8rem; padding: 4px;">
+                                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                                <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                                <option value="gpt-4o">gpt-4o</option>
+                                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                            </select>
+                        </div>
+                        <input type="password" id="ai-api-key" class="form-control" style="font-size: 0.8rem; padding: 4px;" placeholder="在此粘贴你的 API Key" onblur="saveAiApiKey()">
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.85rem; font-weight: bold; color: #333;">💬 智能对话修正</span>
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="saveCurrentAsTemplate()" style="font-size: 0.75rem; padding: 3px 6px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 4px; color: #2e7d32; cursor: pointer; font-weight: bold;">💾 另存模板</button>
+                        <button onclick="resetAiChat()" style="font-size: 0.75rem; padding: 3px 6px; background: #ffebee; border: 1px solid #ef5350; border-radius: 4px; color: #c62828; cursor: pointer; font-weight: bold;">🔄 重置</button>
+                    </div>
+                </div>
+
+                <!-- Template Selector -->
+                <div style="margin-bottom: 10px; display: flex; gap: 6px; align-items: center;">
+                    <span style="font-size: 0.75rem; color: #666; white-space: nowrap;">选择母版:</span>
+                    <select id="ai-template-select" class="form-control" style="font-size: 0.8rem; padding: 3px; flex: 1;" onchange="applySavedTemplate()">
+                        <option value="">-- 无 (由 AI 自由创作) --</option>
+                    </select>
+                </div>
+
+                <!-- Chat History Container -->
+                <div id="ai-chat-history" style="flex: 1; border: 1px solid #ddd; border-radius: 6px; padding: 10px; overflow-y: auto; background: #fafafa; font-size: 0.8rem; display: flex; flex-direction: column; gap: 8px; min-height: 200px; max-height: calc(100vh - 430px); box-sizing: border-box;">
+                    <div style="background: #e8f5e9; color: #2e7d32; padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.4; border-left: 4px solid #4caf50;">
+                        💡 <strong>如何使用：</strong><br>
+                        1. 填入上方的 API Key并选择模型；<br>
+                        2. 首次进入或重置时，输入“根据当前会议数据生成海报和幻灯片”；<br>
+                        3. 如果有任何不满意，在下方输入修改指令（如：“把第1张背景换成大理石红”、“把日程表的字号调小”），AI 会自动调整布局！
+                    </div>
+                </div>
+
+                <!-- Chat Input area -->
+                <div style="margin-top: 10px; display: flex; gap: 6px; align-items: flex-end;">
+                    <textarea id="ai-chat-input" class="form-control" rows="2" style="font-size: 0.8rem; resize: none; flex: 1; box-sizing: border-box;" placeholder="输入修改指令... 按 Shift+Enter 换行" onkeydown="handleAiChatKeydown(event)"></textarea>
+                    <button id="ai-send-btn" onclick="sendAiPrompt()" style="padding: 10px 14px; background: #ab47bc; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">发送</button>
+                </div>
+            </div>
         </div>
 
         <!-- Right Panel -->
         <div class="right-panel">
             
-            <!-- Thumbnail Strip -->
+            <!-- Traditional Thumbnail Strip -->
             <div class="thumbnail-strip" id="thumbnail-strip">
                 <div class="thumbnail poster-thumb active" onclick="switchSlide(0)">海报</div>
                 <div class="thumbnail" onclick="switchSlide(1)">封面</div>
                 <div class="thumbnail" onclick="switchSlide(2)">议程表</div>
                 <div class="thumbnail" onclick="switchSlide(3)">嘉宾</div>
                 <div class="thumbnail" onclick="switchSlide(4)">串场词</div>
+            </div>
+
+            <!-- AI Thumbnail Strip (visible only in AI Mode) -->
+            <div class="thumbnail-strip" id="ai-thumbnail-strip" style="display: none;">
+                <!-- Dynamically populated thumbnails: "海报", "第 1 页", "第 2 页", etc. -->
             </div>
 
             <!-- Canvas Area -->
@@ -546,10 +609,22 @@
                     </div>
                 </div>
 
-                <div class="slide-nav">
+                <!-- AI Slide Canvas (visible only in AI Mode) -->
+                <div id="ai-slide-canvas" class="slide-canvas" style="display: none; background-color: #fafafa; border: 1px solid #ddd;">
+                    <!-- Dynamically drawn elements render here -->
+                </div>
+
+                <div class="slide-nav" id="slide-nav">
                     <button onclick="prevSlide()">◀ 上一张</button>
                     <span id="slide-indicator">第 1 / 4 张</span>
                     <button onclick="nextSlide()">下一张 ▶</button>
+                </div>
+
+                <!-- AI Nav -->
+                <div class="slide-nav" id="ai-slide-nav" style="display: none;">
+                    <button onclick="prevAiSlide()">◀ 上一张</button>
+                    <span id="ai-slide-indicator">海报 (第 0 页)</span>
+                    <button onclick="nextAiSlide()">下一张 ▶</button>
                 </div>
             </div>
 
@@ -1428,15 +1503,22 @@
         let currentSlide = 0;
         let slideList = [];
 
-        function switchTab(tabId) {
+        function switchTab(tabId, el) {
             const btns = document.querySelectorAll('.tab-btn');
             for(let i=0; i<btns.length; i++) btns[i].classList.remove('active');
             
             const contents = document.querySelectorAll('.tab-content');
             for(let i=0; i<contents.length; i++) contents[i].classList.remove('active');
             
-            event.target.classList.add('active');
-            document.getElementById(tabId).classList.add('active');
+            const targetBtn = el || (window.event ? window.event.target : null) || document.querySelector(`.tab-btn[onclick*="${tabId}"]`);
+            if (targetBtn) targetBtn.classList.add('active');
+            
+            const contentEl = document.getElementById(tabId);
+            if (contentEl) contentEl.classList.add('active');
+            
+            state.aiMode = (tabId === 'tab-ai-chat');
+            toggleAiModeUI();
+            saveState();
         }
 
         function rebuildSlides() {
@@ -2960,6 +3042,9 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
         }
 
         async function exportPosterPPT(e) {
+            if (state.aiMode && state.aiDesign) {
+                return exportAiPosterPPT(e);
+            }
             const ev = e || window.event;
             const btn = ev ? ev.target : null;
             let originalText = "🎨 导出海报 (PPT)";
@@ -3306,6 +3391,9 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
         }
 
         async function exportSlidesPPT(e) {
+            if (state.aiMode && state.aiDesign) {
+                return exportAiSlidesPPT(e);
+            }
             const ev = e || window.event;
             const btn = ev ? ev.target : null;
             let originalText = "📽️ 导出串场 (PPT)";
@@ -3672,6 +3760,730 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
             }
         }
 
+        // --- AI Chat Mode state & Config & Prompt ---
+        const AI_SYSTEM_PROMPT = `你是一个专业的会议海报与幻灯片(PPT)设计助理。你的任务是根据用户的文本指令，设计、构建和更新海报及幻灯片组的矢量元素布局(JSON格式)。
+
+### 视觉与排版设计准则：
+1. 风格定位：庄重、专业的医疗/学术会议。配色推荐使用学术深蓝(#1565c0)、天蓝(#00d2ff)、白与灰。
+2. 海报排版：
+   - 宽度固定为 4.58 英寸，高度根据内容自适应（初始设定为 10.0 英寸，若内容多可增至 12.0 或 14.0 英寸）。
+   - 双 Logo 装饰：学术会议Logo居左（圆底红心），齐鲁制药Logo居右（六角徽章）。
+   - 顶部主标题字号 24-28 pt，加粗；副标题 11-13 pt。
+   - 专家头像墙：位于日程表上方，三栏式排版（每个单元 w=1.26"），垂直层级：头像(居上，加渐变蓝环) -> 姓名(加粗, 7.5pt) -> 医院/单位(6.5pt)。
+   - 日程表：无纵向网格线的三线表。
+   - 页脚：包含直播观看二维码及会议号。
+3. 幻灯片排版：
+   - 页面尺寸固定为 13.33 英寸宽，7.5 英寸高（16:9 比例）。
+   - 封面页：大字号主标题（40-60pt），配浅蓝色副标题。
+   - 过渡页：大字号主标题（60pt），配小字号讲者与主持信息。
+   - 简介页：左侧放置方形/矩形照片（x=1.1, y=1.4, w=2.7, h=3.7），下方是姓名与医院。右侧展示多行简介，字号 18-20pt。
+   - 讨论页：嘉宾以多人墙矩阵横向对称居中排版。
+
+### 输出数据格式 (JSON Schema)：
+你必须且仅能返回一个合法的 JSON 数据块，使用 \`\`\`json ... \`\`\` 包裹。
+格式必须与以下结构完全一致：
+{
+  "poster": {
+    "width": 4.58,
+    "height": 10.0,
+    "elements": [
+      { "type": "shape", "shapeType": "rectangle", "x": 0, "y": 0, "w": 4.58, "h": 10.0, "fill": "#f2f8ff", "line": { "color": "none", "width": 0 } },
+      { "type": "text", "text": "精诚医途会议", "x": 0.2, "y": 0.8, "w": 4.18, "h": 1.0, "fontSize": 24, "color": "#0a3a6e", "fontFace": "Microsoft YaHei", "align": "center", "bold": true }
+    ]
+  },
+  "slides": [
+    {
+      "id": "slide_cover",
+      "type": "cover",
+      "width": 13.33,
+      "height": 7.5,
+      "elements": [
+        { "type": "shape", "shapeType": "rectangle", "x": 0, "y": 0, "w": 13.33, "h": 7.5, "fill": "#0d47a1", "line": { "color": "none", "width": 0 } },
+        { "type": "text", "text": "精诚医途", "x": 1.0, "y": 2.0, "w": 11.33, "h": 1.5, "fontSize": 60, "color": "#ffffff", "fontFace": "Microsoft YaHei", "align": "center", "bold": true }
+      ]
+    }
+  ]
+}
+
+支持的 Element 属性：
+- Text: { type: "text", text, x, y, w, h, fontSize, color, fontFace, align: "left"|"center"|"right", bold: boolean, italic: boolean }
+- Shape: { type: "shape", shapeType: "rectangle"|"oval"|"line", x, y, w, h, fill, line: { color, width } }
+- Image: { type: "image", src, x, y, w, h, shape: "circle"|"square"|"gradient-ring" }
+- Table: { type: "table", x, y, w, colW: number[], headers: string[], rows: string[][], styles: { fontSize, textColor } }
+
+注意：你生成或修改布局时，应把用户提供的数据（如标题、副标题、讲者列表、议程）填入对应的元素中。不要漏掉重要信息！`;
+
+        let activeAiSlideIndex = 0;
+        let aiConfigCollapsed = false;
+
+        function toggleAiConfig() {
+            aiConfigCollapsed = !aiConfigCollapsed;
+            document.getElementById('ai-config-fields').style.display = aiConfigCollapsed ? 'none' : 'flex';
+            document.getElementById('toggle-ai-config-link').innerText = aiConfigCollapsed ? '[点击展开]' : '[展开/收起]';
+        }
+
+        function updateAiProvider() {
+            const provider = document.getElementById('ai-provider').value;
+            localStorage.setItem('ai_provider', provider);
+            updateAiProviderOptions(provider);
+        }
+
+        function updateAiProviderOptions(provider) {
+            const modelSelect = document.getElementById('ai-model');
+            modelSelect.innerHTML = '';
+            if (provider === 'gemini') {
+                modelSelect.add(new Option('gemini-2.5-flash', 'gemini-2.5-flash'));
+                modelSelect.add(new Option('gemini-2.5-pro', 'gemini-2.5-pro'));
+            } else {
+                modelSelect.add(new Option('gpt-4o', 'gpt-4o'));
+                modelSelect.add(new Option('gpt-4o-mini', 'gpt-4o-mini'));
+            }
+            const savedModel = localStorage.getItem('ai_model');
+            if (savedModel && Array.from(modelSelect.options).some(o => o.value === savedModel)) {
+                modelSelect.value = savedModel;
+            } else {
+                localStorage.setItem('ai_model', modelSelect.value);
+            }
+        }
+
+        function saveAiApiKey() {
+            const key = document.getElementById('ai-api-key').value.trim();
+            localStorage.setItem('ai_api_key', key);
+        }
+
+        function loadAiApiKey() {
+            const provider = localStorage.getItem('ai_provider') || 'gemini';
+            const model = localStorage.getItem('ai_model') || 'gemini-2.5-flash';
+            const apiKey = localStorage.getItem('ai_api_key') || '';
+            document.getElementById('ai-provider').value = provider;
+            updateAiProviderOptions(provider);
+            document.getElementById('ai-model').value = model;
+            document.getElementById('ai-api-key').value = apiKey;
+        }
+
+        function toggleAiModeUI() {
+            const isAi = !!state.aiMode;
+            document.getElementById('thumbnail-strip').style.display = isAi ? 'none' : 'flex';
+            document.getElementById('slide-canvas').style.display = isAi ? 'none' : 'flex';
+            document.getElementById('slide-nav').style.display = isAi ? 'none' : 'flex';
+            
+            document.getElementById('ai-thumbnail-strip').style.display = isAi ? 'flex' : 'none';
+            document.getElementById('ai-slide-canvas').style.display = isAi ? 'flex' : 'none';
+            document.getElementById('ai-slide-nav').style.display = isAi ? 'flex' : 'none';
+            
+            if (isAi) {
+                renderAiThumbnails();
+                renderCurrentAiSlide();
+            }
+        }
+
+        function renderJSONToCanvas(canvasJSON, targetElement) {
+            if (!canvasJSON || !targetElement) return;
+            targetElement.innerHTML = '';
+            const isPoster = canvasJSON.type === 'poster';
+            const S = isPoster ? 96 : 60;
+            
+            targetElement.className = 'slide-canvas' + (isPoster ? ' poster-mode' : '');
+            targetElement.style.position = 'relative';
+            targetElement.style.width = (canvasJSON.width * S) + 'px';
+            targetElement.style.height = (canvasJSON.height * S) + 'px';
+            targetElement.style.minHeight = isPoster ? '960px' : 'auto';
+            targetElement.style.overflow = 'hidden';
+            targetElement.style.display = 'flex';
+            targetElement.style.flexDirection = 'column';
+            targetElement.style.justifyContent = 'flex-start';
+            targetElement.style.alignItems = 'stretch';
+            
+            canvasJSON.elements.forEach(el => {
+                const div = document.createElement('div');
+                div.style.position = 'absolute';
+                div.style.left = (el.x * S) + 'px';
+                div.style.top = (el.y * S) + 'px';
+                div.style.width = (el.w * S) + 'px';
+                div.style.height = (el.h * S) + 'px';
+                div.style.boxSizing = 'border-box';
+                
+                if (el.type === 'shape') {
+                    if (el.shapeType === 'rectangle') {
+                        div.style.backgroundColor = el.fill;
+                        if (el.line && el.line.color !== 'none') {
+                            div.style.border = `${el.line.width}px solid ${el.line.color}`;
+                        }
+                    } else if (el.shapeType === 'oval') {
+                        div.style.backgroundColor = el.fill;
+                        div.style.borderRadius = '50%';
+                        if (el.line && el.line.color !== 'none') {
+                            div.style.border = `${el.line.width}px solid ${el.line.color}`;
+                        }
+                    } else if (el.shapeType === 'line') {
+                        div.style.borderTop = `${el.line?.width || 1}px solid ${el.line?.color || '#ccc'}`;
+                        div.style.height = '0px';
+                    }
+                } else if (el.type === 'text') {
+                    div.style.display = 'flex';
+                    div.style.alignItems = 'center';
+                    if (el.align === 'center') {
+                        div.style.justifyContent = 'center';
+                    } else if (el.align === 'right') {
+                        div.style.justifyContent = 'flex-end';
+                    } else {
+                        div.style.justifyContent = 'flex-start';
+                    }
+                    div.style.textAlign = el.align || 'left';
+                    div.style.color = el.color || '#333333';
+                    div.style.fontSize = (el.fontSize * (S / 72)) + 'px';
+                    div.style.fontFamily = el.fontFace || 'Microsoft YaHei, sans-serif';
+                    div.style.fontWeight = el.bold ? 'bold' : 'normal';
+                    div.style.fontStyle = el.italic ? 'italic' : 'normal';
+                    div.style.whiteSpace = 'pre-wrap';
+                    div.style.wordBreak = 'break-all';
+                    div.innerHTML = (el.text || '').replace(/\n/g, '<br>');
+                } else if (el.type === 'image') {
+                    if (el.shape === 'circle') {
+                        div.style.borderRadius = '50%';
+                        div.style.overflow = 'hidden';
+                        div.style.backgroundImage = `url(${el.src})`;
+                        div.style.backgroundSize = 'cover';
+                        div.style.backgroundPosition = 'center';
+                        div.style.border = '2px solid white';
+                        div.style.boxShadow = '0 3px 8px rgba(0,0,0,0.15)';
+                    } else if (el.shape === 'gradient-ring') {
+                        div.style.borderRadius = '50%';
+                        div.style.background = 'conic-gradient(from 120deg, #1e88e5 0%, rgba(30,136,229,0.1) 60%, #00d2ff 100%)';
+                        div.style.boxShadow = '0 3px 10px rgba(30,136,229,0.25)';
+                        div.style.padding = '3px';
+                        div.style.display = 'flex';
+                        div.style.alignItems = 'center';
+                        div.style.justifyContent = 'center';
+                        
+                        const innerImg = document.createElement('div');
+                        innerImg.style.width = '100%';
+                        innerImg.style.height = '100%';
+                        innerImg.style.borderRadius = '50%';
+                        innerImg.style.backgroundImage = `url(${el.src})`;
+                        innerImg.style.backgroundSize = 'cover';
+                        innerImg.style.backgroundPosition = 'center';
+                        div.appendChild(innerImg);
+                    } else {
+                        div.style.borderRadius = '4px';
+                        div.style.overflow = 'hidden';
+                        div.style.backgroundImage = `url(${el.src})`;
+                        div.style.backgroundSize = 'cover';
+                        div.style.backgroundPosition = 'center';
+                        div.style.border = '3px solid white';
+                        div.style.boxShadow = '0 4px 10px rgba(0,0,0,0.2)';
+                    }
+                } else if (el.type === 'table') {
+                    const table = document.createElement('table');
+                    table.style.width = '100%';
+                    table.style.borderCollapse = 'collapse';
+                    table.style.fontSize = (el.styles?.fontSize || 8) * (S / 72) + 'px';
+                    table.style.color = el.styles?.textColor || '#333333';
+                    table.style.fontFamily = 'Microsoft YaHei, sans-serif';
+                    
+                    if (el.headers && el.headers.length > 0) {
+                        const tr = document.createElement('tr');
+                        tr.style.background = 'linear-gradient(90deg, #1565c0, #1e88e5)';
+                        tr.style.color = 'white';
+                        tr.style.fontWeight = 'bold';
+                        el.headers.forEach((h, hIdx) => {
+                            const th = document.createElement('th');
+                            th.style.padding = '5px 8px';
+                            th.style.textAlign = 'left';
+                            if (hIdx === 0) th.style.borderTopLeftRadius = '20px';
+                            if (hIdx === el.headers.length - 1) th.style.borderTopRightRadius = '20px';
+                            th.innerText = h;
+                            tr.appendChild(th);
+                        });
+                        table.appendChild(tr);
+                    }
+                    if (el.rows) {
+                        el.rows.forEach(row => {
+                            const tr = document.createElement('tr');
+                            tr.style.borderBottom = '1px solid rgba(0,0,0,0.06)';
+                            if (row.length === 1 || row[0].startsWith('主持：') || row[0].startsWith('主持:')) {
+                                const td = document.createElement('td');
+                                td.colSpan = el.headers.length;
+                                td.style.padding = '6px 12px';
+                                td.style.fontWeight = 'bold';
+                                td.style.color = '#1565c0';
+                                td.style.backgroundColor = '#e3f2fd';
+                                td.innerText = row[0];
+                                tr.appendChild(td);
+                            } else {
+                                row.forEach((cellText, cellIdx) => {
+                                    const td = document.createElement('td');
+                                    td.style.padding = '5px 8px';
+                                    if (cellIdx === 0) {
+                                        td.style.color = 'var(--primary-color)';
+                                        td.style.fontWeight = 'bold';
+                                    }
+                                    if (cellIdx === 1) {
+                                        td.style.color = '#222';
+                                        td.style.fontWeight = 'bold';
+                                    }
+                                    td.innerHTML = cellText.replace(/\n/g, '<br>');
+                                    tr.appendChild(td);
+                                });
+                            }
+                            table.appendChild(tr);
+                        });
+                    }
+                    div.appendChild(table);
+                }
+                targetElement.appendChild(div);
+            });
+        }
+
+        function renderAiThumbnails() {
+            const strip = document.getElementById('ai-thumbnail-strip');
+            if (!strip) return;
+            strip.innerHTML = '';
+            if (!state.aiDesign) {
+                strip.innerHTML = '<div style="color:#aaa; font-size:0.8rem; padding: 10px;">暂无 AI 页面，请发送指令生成！</div>';
+                return;
+            }
+            const posterThumb = document.createElement('div');
+            posterThumb.className = 'thumbnail' + (activeAiSlideIndex === 0 ? ' active' : '');
+            posterThumb.innerText = '海报';
+            posterThumb.onclick = () => switchAiSlide(0);
+            strip.appendChild(posterThumb);
+            
+            if (state.aiDesign.slides) {
+                state.aiDesign.slides.forEach((slide, sIdx) => {
+                    const thumb = document.createElement('div');
+                    thumb.className = 'thumbnail' + (activeAiSlideIndex === (sIdx + 1) ? ' active' : '');
+                    thumb.innerText = `页 ${sIdx + 1} (${slide.type || '页面'})`;
+                    thumb.onclick = () => switchAiSlide(sIdx + 1);
+                    strip.appendChild(thumb);
+                });
+            }
+        }
+
+        function switchAiSlide(index) {
+            activeAiSlideIndex = index;
+            const thumbs = document.querySelectorAll('#ai-thumbnail-strip .thumbnail');
+            thumbs.forEach((t, tIdx) => {
+                if (tIdx === index) t.classList.add('active');
+                else t.classList.remove('active');
+            });
+            renderCurrentAiSlide();
+        }
+
+        function renderCurrentAiSlide() {
+            const canvas = document.getElementById('ai-slide-canvas');
+            const nav = document.getElementById('ai-slide-nav');
+            const indicator = document.getElementById('ai-slide-indicator');
+            if (!state.aiDesign) {
+                canvas.innerHTML = '<div style="color:#888; font-size: 1.2rem; font-weight:bold; height: 100%; display:flex; align-items:center; justify-content:center;">💡 填入密钥并发送“生成”，在此预览实时设计！</div>';
+                canvas.className = 'slide-canvas';
+                canvas.style.width = '800px';
+                canvas.style.height = '450px';
+                nav.style.display = 'none';
+                return;
+            }
+            nav.style.display = 'flex';
+            if (activeAiSlideIndex === 0) {
+                renderJSONToCanvas(state.aiDesign.poster, canvas);
+                indicator.innerText = '海报';
+            } else {
+                const slideData = state.aiDesign.slides[activeAiSlideIndex - 1];
+                if (slideData) {
+                    renderJSONToCanvas(slideData, canvas);
+                    indicator.innerText = `第 ${activeAiSlideIndex} / ${state.aiDesign.slides.length} 页 (${slideData.type})`;
+                } else {
+                    activeAiSlideIndex = 0;
+                    renderCurrentAiSlide();
+                }
+            }
+        }
+
+        function prevAiSlide() {
+            if (!state.aiDesign) return;
+            const total = 1 + (state.aiDesign.slides ? state.aiDesign.slides.length : 0);
+            activeAiSlideIndex = (activeAiSlideIndex - 1 + total) % total;
+            switchAiSlide(activeAiSlideIndex);
+        }
+
+        function nextAiSlide() {
+            if (!state.aiDesign) return;
+            const total = 1 + (state.aiDesign.slides ? state.aiDesign.slides.length : 0);
+            activeAiSlideIndex = (activeAiSlideIndex + 1) % total;
+            switchAiSlide(activeAiSlideIndex);
+        }
+
+        async function callLLMAPI(provider, model, key, systemInstruction, messages) {
+            if (provider === 'gemini') {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [
+                            {
+                                role: 'user',
+                                parts: [
+                                    { text: systemInstruction },
+                                    { text: messages[0].content }
+                                ]
+                            }
+                        ],
+                        generationConfig: { temperature: 0.2 }
+                    })
+                });
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error?.message || response.statusText);
+                }
+                const resData = await response.json();
+                const replyText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!replyText) throw new Error("Gemini 没有返回任何有效文本。");
+                return replyText;
+            } else {
+                const url = 'https://api.openai.com/v1/chat/completions';
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${key}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [
+                            { role: 'system', content: systemInstruction },
+                            { role: 'user', content: messages[0].content }
+                        ],
+                        temperature: 0.2
+                    })
+                });
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error?.message || response.statusText);
+                }
+                const resData = await response.json();
+                const replyText = resData.choices?.[0]?.message?.content;
+                if (!replyText) throw new Error("OpenAI 没有返回任何有效文本。");
+                return replyText;
+            }
+        }
+
+        async function sendAiPrompt() {
+            const key = localStorage.getItem('ai_api_key');
+            if (!key) {
+                alert("请先配置并保存 API Key！");
+                return;
+            }
+            const inputEl = document.getElementById('ai-chat-input');
+            const prompt = inputEl.value.trim();
+            if (!prompt) return;
+            const btn = document.getElementById('ai-send-btn');
+            btn.innerText = "生成中...";
+            btn.disabled = true;
+            inputEl.disabled = true;
+            appendMessage('user', prompt);
+            inputEl.value = '';
+            
+            try {
+                const provider = document.getElementById('ai-provider').value;
+                const model = document.getElementById('ai-model').value;
+                const currentDataStr = JSON.stringify({
+                    meta: state.meta,
+                    agenda: state.agenda.map(a => {
+                        let speaker = '';
+                        if (a.speakerId) {
+                            speaker = a.speakerId.split(',').map(id => {
+                                const p = state.people.find(x => x.id === id);
+                                return p ? getPersonNameAndHospital(p) : '';
+                            }).filter(Boolean).join('、');
+                        }
+                        let host = '';
+                        if (a.hostId) {
+                            host = a.hostId.split(',').map(id => {
+                                const p = state.people.find(x => x.id === id);
+                                return p ? getPersonNameAndHospital(p) : '';
+                            }).filter(Boolean).join('、');
+                        }
+                        return { title: a.title, startTimeStr: a.startTimeStr, endTimeStr: a.endTimeStr, type: a.type, speaker, host };
+                    }),
+                    people: state.people.map(p => ({ name: p.name, role: p.role, bio: p.bio, avatarUrl: p.avatarUrl }))
+                });
+                
+                const systemMsg = AI_SYSTEM_PROMPT;
+                let userPromptContent = `这是我们本次会议最新的数据：\n${currentDataStr}\n\n`;
+                if (state.aiDesign) {
+                    userPromptContent += `当前的海报与幻灯片设计布局JSON为：\n${JSON.stringify(state.aiDesign)}\n\n`;
+                } else {
+                    userPromptContent += `当前尚无设计布局，请直接根据会议数据为我生成全新的初始海报及幻灯片设计 JSON。\n\n`;
+                }
+                userPromptContent += `用户修改指令是：\n"${prompt}"\n\n请修改或生成符合指令的最新设计布局，仅返回合法的 JSON 代码块。`;
+                
+                appendMessage('assistant', "🤖 正在为您修改设计，请稍候...");
+                const responseText = await callLLMAPI(provider, model, key, systemMsg, [{ role: 'user', content: userPromptContent }]);
+                
+                const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/) || responseText.match(/(\{[\s\S]*\})/);
+                if (!jsonMatch) throw new Error("AI 返回的结果没有包含合法的 JSON 代码块！");
+                
+                const cleanedJsonText = jsonMatch[1].trim();
+                const newDesign = JSON.parse(cleanedJsonText);
+                if (!newDesign.poster || !newDesign.slides) throw new Error("JSON 格式不正确，缺少 poster 或 slides 节点！");
+                
+                state.aiDesign = newDesign;
+                saveState();
+                
+                const historyEl = document.getElementById('ai-chat-history');
+                if (historyEl.lastChild) historyEl.removeChild(historyEl.lastChild);
+                
+                appendMessage('assistant', "✅ 设计已成功更新，右侧画面已刷新！");
+                renderAiThumbnails();
+                renderCurrentAiSlide();
+            } catch (err) {
+                console.error("AI Generation Error:", err);
+                const historyEl = document.getElementById('ai-chat-history');
+                if (historyEl.lastChild && historyEl.lastChild.innerText.includes("正在为您修改")) {
+                    historyEl.removeChild(historyEl.lastChild);
+                }
+                appendMessage('assistant', "❌ 出现错误: " + err.message);
+            } finally {
+                btn.innerText = "发送";
+                btn.disabled = false;
+                inputEl.disabled = false;
+                inputEl.focus();
+            }
+        }
+
+        function appendMessage(role, text) {
+            const historyEl = document.getElementById('ai-chat-history');
+            const msgDiv = document.createElement('div');
+            if (role === 'user') {
+                msgDiv.style.alignSelf = 'flex-end';
+                msgDiv.style.background = '#e1bee7';
+                msgDiv.style.color = '#4a148c';
+                msgDiv.style.padding = '8px 12px';
+                msgDiv.style.borderRadius = '12px 12px 2px 12px';
+                msgDiv.style.maxWidth = '85%';
+                msgDiv.style.wordBreak = 'break-word';
+                msgDiv.innerText = text;
+            } else {
+                msgDiv.style.alignSelf = 'flex-start';
+                msgDiv.style.background = '#ffffff';
+                msgDiv.style.color = '#333333';
+                msgDiv.style.padding = '8px 12px';
+                msgDiv.style.borderRadius = '12px 12px 12px 2px';
+                msgDiv.style.border = '1px solid #eee';
+                msgDiv.style.maxWidth = '85%';
+                msgDiv.style.wordBreak = 'break-word';
+                if (text.startsWith("✅") || text.startsWith("❌") || text.startsWith("🤖")) {
+                    msgDiv.innerHTML = text;
+                } else {
+                    msgDiv.innerText = text;
+                }
+            }
+            historyEl.appendChild(msgDiv);
+            historyEl.scrollTop = historyEl.scrollHeight;
+        }
+
+        function handleAiChatKeydown(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendAiPrompt();
+            }
+        }
+
+        function resetAiChat() {
+            if (confirm("确定要重置 AI 设计吗？这会清除当前的 AI 页面布局与对话历史。")) {
+                state.aiDesign = null;
+                saveState();
+                const historyEl = document.getElementById('ai-chat-history');
+                historyEl.innerHTML = `
+                    <div style="background: #e8f5e9; color: #2e7d32; padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.4; border-left: 4px solid #4caf50;">
+                        💡 <strong>如何使用：</strong><br>
+                        1. 填入上方的 API Key并选择模型；<br>
+                        2. 首次进入或重置时，输入“根据当前会议数据生成海报和幻灯片”；<br>
+                        3. 如果有任何不满意，在下方输入修改指令（如：“把第1张背景换成大理石红”、“把日程表的字号调小”），AI 会自动调整布局！
+                    </div>
+                `;
+                renderAiThumbnails();
+                renderCurrentAiSlide();
+            }
+        }
+
+        function saveCurrentAsTemplate() {
+            if (!state.aiDesign) {
+                alert("无有效的设计可以保存！");
+                return;
+            }
+            const name = prompt("请输入此母版模板的名称：");
+            if (!name) return;
+            let templates = JSON.parse(localStorage.getItem('conf_ai_templates')) || [];
+            templates.push({ name: name, design: state.aiDesign });
+            localStorage.setItem('conf_ai_templates', JSON.stringify(templates));
+            alert(`成功保存母版“${name}”！下次在新会议中可以直接选用。`);
+            loadSavedTemplates();
+        }
+
+        function loadSavedTemplates() {
+            const select = document.getElementById('ai-template-select');
+            if (!select) return;
+            select.innerHTML = '<option value="">-- 无 (由 AI 自由创作) --</option>';
+            const templates = JSON.parse(localStorage.getItem('conf_ai_templates')) || [];
+            templates.forEach((t, idx) => {
+                select.add(new Option(t.name, idx));
+            });
+        }
+
+        function applySavedTemplate() {
+            const idx = document.getElementById('ai-template-select').value;
+            if (idx === "") return;
+            const templates = JSON.parse(localStorage.getItem('conf_ai_templates')) || [];
+            const t = templates[idx];
+            if (t) {
+                if (confirm(`确定要应用母版“${t.name}”的布局吗？这会使用该布局重新排版你当前输入的所有会议数据。`)) {
+                    state.aiDesign = JSON.parse(JSON.stringify(t.design));
+                    saveState();
+                    appendMessage('user', `应用母版“${t.name}”，正在更新会议内容...`);
+                    sendAiPrompt();
+                }
+            }
+        }
+
+        async function drawElementToPptxSlide(slide, el, pptx) {
+            if (el.type === 'shape') {
+                let fillOpt = el.fill === 'none' ? {} : { color: el.fill.replace('#', '') };
+                let lineOpt = (!el.line || el.line.color === 'none') ? { width: 0 } : { color: el.line.color.replace('#', ''), width: el.line.width || 1 };
+                if (el.fill && el.fill.includes('gradient')) {
+                    fillOpt = { type: 'gradient', color1: '1e88e5', color2: '00d2ff', angle: 120 };
+                }
+                let shapeType = pptx.shapes.RECTANGLE;
+                if (el.shapeType === 'oval') shapeType = pptx.shapes.OVAL;
+                if (el.shapeType === 'line') shapeType = pptx.shapes.LINE;
+                slide.addShape(shapeType, { x: el.x, y: el.y, w: el.w, h: el.h, fill: fillOpt, line: lineOpt });
+            } else if (el.type === 'text') {
+                slide.addText(el.text, {
+                    x: el.x, y: el.y, w: el.w, h: el.h,
+                    fontSize: el.fontSize || 10,
+                    bold: !!el.bold,
+                    italic: !!el.italic,
+                    color: (el.color || '#333333').replace('#', ''),
+                    fontFace: el.fontFace || 'Microsoft YaHei',
+                    align: el.align || 'left',
+                    valign: 'middle'
+                });
+            } else if (el.type === 'image') {
+                if (el.shape === 'circle') {
+                    let dataUrl = el.src;
+                    if (dataUrl && dataUrl.startsWith('data:image')) {
+                        dataUrl = await getCircularAvatarBase64(dataUrl);
+                    }
+                    slide.addImage({ data: dataUrl, x: el.x, y: el.y, w: el.w, h: el.h });
+                } else if (el.shape === 'gradient-ring') {
+                    slide.addShape(pptx.shapes.OVAL, {
+                        x: el.x - 0.02, y: el.y - 0.02, w: el.w + 0.04, h: el.h + 0.04,
+                        fill: { type: 'gradient', color1: '1e88e5', color2: '00d2ff', angle: 120 },
+                        line: { width: 0 }
+                    });
+                    let dataUrl = el.src;
+                    if (dataUrl && dataUrl.startsWith('data:image')) {
+                        dataUrl = await getCircularAvatarBase64(dataUrl);
+                    }
+                    slide.addImage({ data: dataUrl, x: el.x, y: el.y, w: el.w, h: el.h });
+                } else {
+                    slide.addImage({ data: el.src, x: el.x, y: el.y, w: el.w, h: el.h });
+                }
+            } else if (el.type === 'table') {
+                let formattedRows = [];
+                const cellBorder = { bottom: { style: 'thin', color: 'dddddd' } };
+                if (el.headers && el.headers.length > 0) {
+                    formattedRows.push(el.headers.map(h => ({
+                        text: h,
+                        options: { bold: true, color: 'ffffff', fill: { color: '1565c0' }, fontSize: el.styles?.fontSize || 8, fontFace: 'Microsoft YaHei' }
+                    })));
+                }
+                if (el.rows) {
+                    el.rows.forEach(r => {
+                        formattedRows.push(r.map(cellText => {
+                            if (cellText.startsWith('主持：') || cellText.startsWith('主持:')) {
+                                return {
+                                    text: cellText,
+                                    options: { colspan: el.headers.length, bold: true, color: '1565c0', fill: { color: 'e3f2fd' }, fontSize: el.styles?.fontSize || 8, fontFace: 'Microsoft YaHei', border: cellBorder }
+                                };
+                            }
+                            return {
+                                text: cellText,
+                                options: { color: (el.styles?.textColor || '#333333').replace('#', ''), fontSize: el.styles?.fontSize || 8, fontFace: 'Microsoft YaHei', border: cellBorder }
+                            };
+                        }));
+                    });
+                }
+                slide.addTable(formattedRows, { x: el.x, y: el.y, w: el.w, colW: el.colW, fontSize: el.styles?.fontSize || 8, valign: 'middle' });
+            }
+        }
+
+        async function exportAiPosterPPT(e) {
+            const ev = e || window.event;
+            const btn = ev ? ev.target : null;
+            if (btn) {
+                btn.innerText = "正在生成海报 PPT...";
+                btn.disabled = true;
+            }
+            try {
+                if (!state.aiDesign || !state.aiDesign.poster) {
+                    alert("无有效的 AI 设计布局！");
+                    return;
+                }
+                const poster = state.aiDesign.poster;
+                const dynamicHeight = poster.height || 10.0;
+                let pptx = new PptxGenJS();
+                pptx.defineLayout({ name: 'DYNAMIC_POSTER', width: 4.58, height: dynamicHeight });
+                pptx.layout = 'DYNAMIC_POSTER';
+                
+                let slide = pptx.addSlide();
+                for (const el of poster.elements) {
+                    await drawElementToPptxSlide(slide, el, pptx);
+                }
+                await pptx.writeFile({ fileName: `AI_海报_${state.meta.title || '设计'}.pptx` });
+            } catch (err) {
+                console.error("AI Poster Export Error:", err);
+                alert("导出海报失败: " + err.message);
+            } finally {
+                if (btn) {
+                    btn.innerText = "🎨 导出海报 (PPT)";
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        async function exportAiSlidesPPT(e) {
+            const ev = e || window.event;
+            const btn = ev ? ev.target : null;
+            if (btn) {
+                btn.innerText = "正在生成串场 PPT...";
+                btn.disabled = true;
+            }
+            try {
+                if (!state.aiDesign || !state.aiDesign.slides || state.aiDesign.slides.length === 0) {
+                    alert("无有效的 AI 设计幻灯片！");
+                    return;
+                }
+                let pptx = new PptxGenJS();
+                pptx.layout = 'LAYOUT_16x9';
+                for (const slideData of state.aiDesign.slides) {
+                    let slide = pptx.addSlide();
+                    for (const el of slideData.elements) {
+                        await drawElementToPptxSlide(slide, el, pptx);
+                    }
+                }
+                await pptx.writeFile({ fileName: `AI_串场幻灯片_${state.meta.title || '设计'}.pptx` });
+            } catch (err) {
+                console.error("AI Slides Export Error:", err);
+                alert("导出幻灯片失败: " + err.message);
+            } finally {
+                if (btn) {
+                    btn.innerText = "📽️ 导出串场 (PPT)";
+                    btn.disabled = false;
+                }
+            }
+        }
+
         // --- Bootstrap ---
         window.onload = () => {
             initForms();
@@ -3681,7 +4493,25 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
             renderPeopleList();
             renderGuestLibraryList();
             updateSaveStatus();
-            switchSlide(0);
+            
+            // AI Mode initialization
+            loadAiApiKey();
+            loadSavedTemplates();
+            if (state.aiMode) {
+                const aiTabBtn = document.querySelector('.tab-btn[onclick*="tab-ai-chat"]');
+                if (aiTabBtn) {
+                    const btns = document.querySelectorAll('.tab-btn');
+                    for(let i=0; i<btns.length; i++) btns[i].classList.remove('active');
+                    const contents = document.querySelectorAll('.tab-content');
+                    for(let i=0; i<contents.length; i++) contents[i].classList.remove('active');
+                    
+                    aiTabBtn.classList.add('active');
+                    document.getElementById('tab-ai-chat').classList.add('active');
+                }
+                toggleAiModeUI();
+            } else {
+                switchSlide(0);
+            }
         };
     </script>
 </body>
