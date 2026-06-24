@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
     <style>
         :root {
@@ -581,12 +582,49 @@
         <div class="right-panel">
             
             <!-- Traditional Thumbnail Strip -->
-            <div class="thumbnail-strip" id="thumbnail-strip">
-                <div class="thumbnail poster-thumb active" onclick="switchSlide(0)">海报</div>
-                <div class="thumbnail" onclick="switchSlide(1)">封面</div>
-                <div class="thumbnail" onclick="switchSlide(2)">议程表</div>
-                <div class="thumbnail" onclick="switchSlide(3)">嘉宾</div>
-                <div class="thumbnail" onclick="switchSlide(4)">串场词</div>
+            <div class="thumbnail-strip" id="thumbnail-strip"></div>
+
+            <!-- Page Operations Toolbar -->
+            <div id="slide-ops-toolbar" style="background: #e2e8f0; height: 38px; display: flex; align-items: center; padding: 0 20px; gap: 10px; border-bottom: 1px solid #cbd5e1; font-size: 0.8rem; color: #475569;">
+                <span style="font-weight: bold; color: var(--primary-color);">页面管理:</span>
+                
+                <!-- Add Page Dropdown -->
+                <div style="position: relative; display: inline-block;">
+                    <button onclick="toggleAddSlideMenu(event)" style="padding: 3px 8px; background: #1565c0; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.75rem;">
+                        ➕ 添加页面
+                    </button>
+                    <div id="add-slide-menu" style="display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ccc; border-radius: 4px; z-index: 1000; box-shadow: 0 4px 10px rgba(0,0,0,0.15); width: 120px;">
+                        <a href="javascript:void(0)" onclick="handleAddSlide('cover')" style="display: block; padding: 6px 12px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">🎤 封面页</a>
+                        <a href="javascript:void(0)" onclick="handleAddSlide('agenda')" style="display: block; padding: 6px 12px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">📅 议程页</a>
+                        <a href="javascript:void(0)" onclick="handleAddSlide('transition')" style="display: block; padding: 6px 12px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">📖 过渡页</a>
+                        <a href="javascript:void(0)" onclick="handleAddSlide('bio')" style="display: block; padding: 6px 12px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">👤 嘉宾介绍</a>
+                        <a href="javascript:void(0)" onclick="handleAddSlide('discussion_panel')" style="display: block; padding: 6px 12px; color: #333; text-decoration: none; border-bottom: 1px solid #eee;">💬 讨论环节</a>
+                        <a href="javascript:void(0)" onclick="handleAddSlide('custom')" style="display: block; padding: 6px 12px; color: #333; text-decoration: none;">📄 自定义空白页</a>
+                    </div>
+                </div>
+
+                <!-- Current Slide Actions -->
+                <div style="display: flex; gap: 5px; align-items: center;" id="current-slide-actions">
+                    <button onclick="moveSlide(-1)" id="btn-move-up" style="padding: 3px 6px; background: white; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">⬆️ 上移</button>
+                    <button onclick="moveSlide(1)" id="btn-move-down" style="padding: 3px 6px; background: white; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;">⬇️ 下移</button>
+                    <button onclick="deleteCurrentSlide()" id="btn-delete-slide" style="padding: 3px 6px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">❌ 删除</button>
+                    
+                    <span style="margin-left: 10px;">类型:</span>
+                    <select id="slide-type-select" onchange="changeCurrentSlideType(this.value)" style="padding: 2px 4px; border-radius: 4px; border: 1px solid #cbd5e1; font-size: 0.75rem;">
+                        <option value="poster">🖼️ 会议海报</option>
+                        <option value="cover">🎤 封面页</option>
+                        <option value="agenda">📅 议程页</option>
+                        <option value="transition">📖 过渡页</option>
+                        <option value="bio">👤 嘉宾介绍</option>
+                        <option value="discussion_panel">💬 讨论环节</option>
+                        <option value="custom">📄 自定义空白页</option>
+                    </select>
+                </div>
+
+                <!-- Reset/Regen Button -->
+                <button onclick="confirmRegenSlides()" style="margin-left: auto; padding: 3px 8px; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">
+                    🔄 重置所有页 (从议程同步)
+                </button>
             </div>
 
             <!-- AI Thumbnail Strip (visible only in AI Mode) -->
@@ -705,9 +743,9 @@
             2. <strong>姓名 简介内容</strong>（第一行姓名，后面为简介，专家之间用空行隔开）</p>
             <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center;">
                 <button type="button" onclick="document.getElementById('bio-file-input').click()" style="padding: 6px 12px; background: #e8f5e9; border: 1px dashed #4caf50; border-radius: 4px; color: #2e7d32; cursor: pointer; font-size: 0.8rem; font-weight: bold; display: flex; align-items: center; gap: 4px;">
-                    📂 批量导入文档 (.txt / .csv / .xlsx / .docx)
+                    📂 批量导入文档 (.txt / .csv / .xlsx / .docx / .pptx)
                 </button>
-                <input type="file" id="bio-file-input" accept=".txt,.csv,.xlsx,.xls,.docx" style="display: none;" onchange="handleBioFileUpload(event)" multiple>
+                <input type="file" id="bio-file-input" accept=".txt,.csv,.xlsx,.xls,.docx,.pptx" style="display: none;" onchange="handleBioFileUpload(event)" multiple>
                 <span id="bio-file-status" style="font-size: 0.75rem; color: #666;"></span>
             </div>
             <div class="form-group">
@@ -822,6 +860,9 @@
             if (state.meta.showDnaBg === undefined) state.meta.showDnaBg = true;
             if (state.meta.qrcodeUrl === undefined) state.meta.qrcodeUrl = 'https://meeting.tencent.com/dm/xxxxx';
             if (state.meta.meetingId === undefined) state.meta.meetingId = '253-815-592';
+        }
+        if (!state.slides) {
+            state.slides = [];
         }
         let guestLibrary = JSON.parse(localStorage.getItem('conf_guest_library')) || [];
         let saveTimeout = null;
@@ -1522,17 +1563,17 @@
             saveState();
         }
 
-        function rebuildSlides() {
-            slideList = [];
+        function regenerateSlidesFromAgenda() {
+            state.slides = [];
             
             // 1. Poster Slide (always index 0)
-            slideList.push({ type: 'poster' });
+            state.slides.push({ type: 'poster' });
             
             // 2. Cover Slide (always index 1)
-            slideList.push({ type: 'cover' });
+            state.slides.push({ type: 'cover' });
             
             // 3. Agenda Slide (always index 2)
-            slideList.push({ type: 'agenda' });
+            state.slides.push({ type: 'agenda' });
             
             // 4. Generate slides based on agenda items
             state.agenda.forEach(item => {
@@ -1546,7 +1587,7 @@
                 }
 
                 if (item.type === 'opening' || item.type === 'closing') {
-                    slideList.push({
+                    state.slides.push({
                         type: 'transition',
                         title: item.title,
                         subtitle: (speakers.length > 0 ? speakers.map(s => `${s.name} ${ROLE_NAMES[s.role] || ''}`).join('、') : '') + 
@@ -1556,14 +1597,14 @@
                         theme: state.template || 'blue'
                     });
                     
-                    speakers.forEach(s => slideList.push({ type: 'bio', personId: s.id }));
-                    hosts.forEach(h => slideList.push({ type: 'bio', personId: h.id }));
+                    speakers.forEach(s => state.slides.push({ type: 'bio', personId: s.id }));
+                    hosts.forEach(h => state.slides.push({ type: 'bio', personId: h.id }));
                     
                 } else if (item.type === 'talk' || item.type === 'case' || item.type === 'custom') {
                     const speakerNames = speakers.length > 0 ? speakers.map(s => `${s.name} ${ROLE_NAMES[s.role] || ''} (${s.bio ? s.bio.split(/[，,]/)[0] : ''})`).join('、') : '暂无讲者';
                     const hostText = hosts.length > 0 ? `主持: ${hosts.map(h => `${h.name} (${h.bio ? h.bio.split(/[，,]/)[0] : ''})`).join('、')}` : '';
                     
-                    slideList.push({
+                    state.slides.push({
                         type: 'transition',
                         title: item.title,
                         subtitle: speakerNames,
@@ -1573,13 +1614,13 @@
                         theme: state.template || 'blue'
                     });
                     
-                    speakers.forEach(s => slideList.push({ type: 'bio', personId: s.id }));
-                    hosts.forEach(h => slideList.push({ type: 'bio', personId: h.id }));
+                    speakers.forEach(s => state.slides.push({ type: 'bio', personId: s.id }));
+                    hosts.forEach(h => state.slides.push({ type: 'bio', personId: h.id }));
                     
                 } else if (item.type === 'discussion') {
                     let discussantIds = item.discussantIds || [];
                     
-                    slideList.push({
+                    state.slides.push({
                         type: 'transition',
                         title: item.title,
                         subtitle: hosts.length > 0 ? `主持: ${hosts.map(h => h.name).join('、')}` : '讨论环节',
@@ -1588,14 +1629,14 @@
                         theme: state.template || 'blue'
                     });
                     
-                    slideList.push({
+                    state.slides.push({
                         type: 'discussion_panel',
                         agendaId: item.id,
                         hostId: item.hostId,
                         discussantIds: discussantIds
                     });
                 } else if (item.type === 'break') {
-                    slideList.push({
+                    state.slides.push({
                         type: 'transition',
                         title: '茶歇 / 休息',
                         subtitle: 'Coffee Break',
@@ -1603,8 +1644,127 @@
                     });
                 }
             });
+            saveState();
+        }
+
+        function syncSlideContent(slideIndex, key, value) {
+            if (state.slides && state.slides[slideIndex]) {
+                state.slides[slideIndex][key] = value;
+                saveState();
+            }
+        }
+
+        function toggleSlideDiscussant(slideIndex, personId) {
+            if (state.slides && state.slides[slideIndex]) {
+                const slide = state.slides[slideIndex];
+                if (!slide.discussantIds) slide.discussantIds = [];
+                const idx = slide.discussantIds.indexOf(personId);
+                if (idx === -1) {
+                    slide.discussantIds.push(personId);
+                } else {
+                    slide.discussantIds.splice(idx, 1);
+                }
+                saveState();
+                rebuildSlides();
+            }
+        }
+
+        function toggleTransitionPerson(slideIndex, personId, roleKey) {
+            if (state.slides && state.slides[slideIndex]) {
+                const slide = state.slides[slideIndex];
+                if (!slide[roleKey]) slide[roleKey] = [];
+                const idx = slide[roleKey].findIndex(p => p.id === personId);
+                if (idx === -1) {
+                    const pObj = state.people.find(x => x.id === personId);
+                    if (pObj) {
+                        slide[roleKey].push({ id: pObj.id, name: pObj.name, bio: pObj.bio, role: pObj.role });
+                    }
+                } else {
+                    slide[roleKey].splice(idx, 1);
+                }
+                saveState();
+                rebuildSlides();
+            }
+        }
+
+        function toggleAddSlideMenu(event) {
+            event.stopPropagation();
+            const menu = document.getElementById('add-slide-menu');
+            if (menu) {
+                menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+            }
+        }
+
+        // Close dropdown menu on outer click
+        document.addEventListener('click', function() {
+            const menu = document.getElementById('add-slide-menu');
+            if (menu) menu.style.display = 'none';
+        });
+
+        function handleAddSlide(type) {
+            if (!state.slides) state.slides = [];
             
+            let newSlide = { type: type };
+            if (type === 'transition') {
+                newSlide.title = '新增过渡环节';
+                newSlide.subtitle = '过渡副标题';
+                newSlide.speakers = [];
+                newSlide.hosts = [];
+            } else if (type === 'custom') {
+                newSlide.title = '自定义空白页';
+                newSlide.content = '请输入自定义页面内容...';
+            } else if (type === 'bio') {
+                newSlide.personId = state.people.length > 0 ? state.people[0].id : '';
+            } else if (type === 'discussion_panel') {
+                newSlide.discussantIds = [];
+            }
+            
+            state.slides.splice(currentSlide + 1, 0, newSlide);
+            currentSlide = currentSlide + 1;
+            
+            saveState();
+            rebuildSlides();
+            
+            const menu = document.getElementById('add-slide-menu');
+            if (menu) menu.style.display = 'none';
+        }
+
+        function moveSlide(dir) {
+            if (!state.slides) return;
+            const newIndex = currentSlide + dir;
+            if (newIndex < 0 || newIndex >= state.slides.length) return;
+            
+            const temp = state.slides[currentSlide];
+            state.slides[currentSlide] = state.slides[newIndex];
+            state.slides[newIndex] = temp;
+            
+            currentSlide = newIndex;
+            saveState();
+            rebuildSlides();
+        }
+
+        function deleteCurrentSlide() {
+            if (!state.slides || state.slides.length <= 1) {
+                alert("无法删除所有页面，至少保留一页。");
+                return;
+            }
+            if (confirm("确定要删除当前这一页吗？")) {
+                state.slides.splice(currentSlide, 1);
+                currentSlide = Math.max(0, currentSlide - 1);
+                saveState();
+                rebuildSlides();
+            }
+        }
+
+        function rebuildSlides() {
+            if (!state.slides || state.slides.length === 0) {
+                regenerateSlidesFromAgenda();
+            }
+            slideList = state.slides;
             renderThumbnailStrip();
+            if (currentSlide >= slideList.length) {
+                currentSlide = slideList.length - 1;
+            }
             switchSlide(currentSlide);
         }
 
@@ -1622,12 +1782,16 @@
                 if (slide.type === 'poster') label = '海报';
                 else if (slide.type === 'cover') label = '封面';
                 else if (slide.type === 'agenda') label = '日程';
-                else if (slide.type === 'transition') label = slide.title.substring(0, 4);
-                else if (slide.type === 'bio') {
+                else if (slide.type === 'transition') {
+                    label = (slide.title || '过渡').substring(0, 4);
+                } else if (slide.type === 'bio') {
                     let p = state.people.find(x => x.id === slide.personId);
                     label = p ? `${p.name}` : '简介';
+                } else if (slide.type === 'discussion_panel') {
+                    label = '讨论';
+                } else if (slide.type === 'custom') {
+                    label = (slide.title || '自定义').substring(0, 4);
                 }
-                else if (slide.type === 'discussion_panel') label = '嘉宾墙';
                 
                 thumb.innerText = label;
                 strip.appendChild(thumb);
@@ -1637,6 +1801,37 @@
             if (indicator) {
                 indicator.innerText = `第 ${currentSlide + 1} / ${slideList.length} 张`;
             }
+        }
+
+        function confirmRegenSlides() {
+            if (confirm("确定要重新生成所有串场页吗？这将会清空您之前对幻灯片页面的所有手动修改，并重新从日程生成。")) {
+                regenerateSlidesFromAgenda();
+                rebuildSlides();
+            }
+        }
+
+        function changeCurrentSlideType(type) {
+            if (!state.slides || !state.slides[currentSlide]) return;
+            const slide = state.slides[currentSlide];
+            slide.type = type;
+            
+            // Set defaults if missing
+            if (type === 'transition') {
+                if (slide.title === undefined) slide.title = '新增过渡环节';
+                if (slide.subtitle === undefined) slide.subtitle = '过渡副标题';
+                if (slide.speakers === undefined) slide.speakers = [];
+                if (slide.hosts === undefined) slide.hosts = [];
+            } else if (type === 'custom') {
+                if (slide.title === undefined) slide.title = '自定义空白页';
+                if (slide.content === undefined) slide.content = '请输入自定义页面内容...';
+            } else if (type === 'bio') {
+                if (slide.personId === undefined) slide.personId = state.people.length > 0 ? state.people[0].id : '';
+            } else if (type === 'discussion_panel') {
+                if (slide.discussantIds === undefined) slide.discussantIds = [];
+            }
+            
+            saveState();
+            rebuildSlides();
         }
 
         function switchSlide(index) {
@@ -1649,9 +1844,22 @@
                 else t.classList.remove('active');
             });
             
-            const canvas = document.getElementById('slide-canvas');
+            // Sync page operations toolbar state
             const slide = slideList[index];
+            const typeSelect = document.getElementById('slide-type-select');
+            if (typeSelect) {
+                typeSelect.value = slide.type;
+            }
             
+            const btnMoveUp = document.getElementById('btn-move-up');
+            const btnMoveDown = document.getElementById('btn-move-down');
+            const btnDelete = document.getElementById('btn-delete-slide');
+            
+            if (btnMoveUp) btnMoveUp.disabled = (index === 0 || slide.type === 'poster');
+            if (btnMoveDown) btnMoveDown.disabled = (index === slideList.length - 1 || slide.type === 'poster');
+            if (btnDelete) btnDelete.disabled = (slide.type === 'poster');
+            
+            const canvas = document.getElementById('slide-canvas');
             canvas.style.backgroundImage = '';
             canvas.style.backgroundSize = '';
             canvas.style.backgroundPosition = '';
@@ -1779,15 +1987,15 @@
                 let content = '';
                 if (slide.type === 'cover') {
                     content = `
-                        <div style="text-align:center; padding:20px;">
-                            <h1 style="font-family:var(--font-serif); font-size: 40px; margin-bottom: 20px; text-shadow:0 2px 4px rgba(0,0,0,0.3);">${state.meta.title}</h1>
-                            <h3 style="color:#bbdefb; font-size: 18px; font-weight: normal; letter-spacing: 2px; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${state.meta.subtitle}</h3>
-                            <div style="margin-top: 50px; font-size: 16px; opacity:0.8;">${state.meta.date}</div>
+                        <div style="text-align:center; padding:20px; z-index:2;">
+                            <h1 contenteditable="true" onblur="syncSlideContent(${index}, 'title', this.innerText)" style="font-family:var(--font-serif); font-size: 40px; margin-bottom: 20px; text-shadow:0 2px 4px rgba(0,0,0,0.3); color:white; outline:none; cursor:text;">${slide.title || state.meta.title}</h1>
+                            <h3 contenteditable="true" onblur="syncSlideContent(${index}, 'subtitle', this.innerText)" style="color:#bbdefb; font-size: 18px; font-weight: normal; letter-spacing: 2px; text-shadow:0 1px 2px rgba(0,0,0,0.3); outline:none; cursor:text;">${slide.subtitle || state.meta.subtitle}</h3>
+                            <div contenteditable="true" onblur="syncSlideContent(${index}, 'date', this.innerText)" style="margin-top: 50px; font-size: 16px; opacity:0.8; color:white; outline:none; cursor:text;">${slide.date || state.meta.date}</div>
                         </div>
                     `;
                 } else if (slide.type === 'agenda') {
                     content = `
-                        <h2 style="font-family:var(--font-serif); font-size: 28px; margin-bottom: 20px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 10px; width: 85%;">会议日程</h2>
+                        <h2 style="font-family:var(--font-serif); font-size: 28px; margin-bottom: 20px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 10px; width: 85%; color:white;">会议日程</h2>
                         <div id="slide-agenda-preview" style="font-size:16px; text-align:left; width: 85%;"></div>
                     `;
                 } else if (slide.type === 'transition') {
@@ -1795,7 +2003,7 @@
                     let expertsHtml = '';
                     if (experts.length > 0) {
                         expertsHtml = `
-                        <div style="display:flex; justify-content:center; gap:40px; margin-top:40px; width:85%; flex-wrap:wrap;">
+                        <div style="display:flex; justify-content:center; gap:40px; margin-top:30px; width:85%; flex-wrap:wrap;">
                             ${experts.map(p => {
                                 const hospital = p.bio ? p.bio.split(/[，,]/)[0].trim() : '';
                                 return `
@@ -1809,20 +2017,55 @@
                         `;
                     } else {
                         expertsHtml = `
-                        <h2 style="color:#bbdefb; font-size: 22px; font-weight: normal; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${slide.subtitle || ''}</h2>
-                        ${slide.hostText ? `<h3 style="margin-top: 30px; opacity: 0.9; font-weight: normal; font-size:16px;">${slide.hostText}</h3>` : ''}
+                        <h2 contenteditable="true" onblur="syncSlideContent(${index}, 'subtitle', this.innerText)" style="color:#bbdefb; font-size: 22px; font-weight: normal; text-shadow:0 1px 2px rgba(0,0,0,0.3); outline:none; cursor:text;">${slide.subtitle || '（未关联人员，可在此处输入文字）'}</h2>
+                        ${slide.hostText ? `<h3 contenteditable="true" onblur="syncSlideContent(${index}, 'hostText', this.innerText)" style="margin-top: 30px; opacity: 0.9; font-weight: normal; font-size:16px; color:white; outline:none; cursor:text;">${slide.hostText}</h3>` : ''}
                         `;
                     }
-
+                    
+                    let transitionSelector = `
+                        <div style="margin-top: 25px; background: rgba(255,255,255,0.15); padding: 8px 15px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); font-size: 11px; text-align: left; width: 85%; box-sizing: border-box; display: flex; gap: 20px;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: bold; color: #bbdefb; margin-bottom: 4px;">📖 关联报告人 (主讲):</div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 80px; overflow-y: auto;">
+                                    ${state.people.map(p => {
+                                        const checked = slide.speakers && slide.speakers.some(x => x.id === p.id) ? 'checked' : '';
+                                        return `<label style="color: white; display: flex; align-items: center; gap: 3px; cursor: pointer;"><input type="checkbox" value="${p.id}" ${checked} onchange="toggleTransitionPerson(${index}, '${p.id}', 'speakers')"> ${p.name}</label>`;
+                                    }).join('')}
+                                </div>
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-weight: bold; color: #bbdefb; margin-bottom: 4px;">🎤 关联主持人:</div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 80px; overflow-y: auto;">
+                                    ${state.people.map(p => {
+                                        const checked = slide.hosts && slide.hosts.some(x => x.id === p.id) ? 'checked' : '';
+                                        return `<label style="color: white; display: flex; align-items: center; gap: 3px; cursor: pointer;"><input type="checkbox" value="${p.id}" ${checked} onchange="toggleTransitionPerson(${index}, '${p.id}', 'hosts')"> ${p.name}</label>`;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
                     content = `
-                        <div style="text-align:center; padding: 40px; z-index:2; display:flex; flex-direction:column; align-items:center; width:100%; box-sizing:border-box;">
-                            <h1 style="font-family:var(--font-serif); font-size: 36px; margin-bottom: 20px; text-shadow:0 2px 4px rgba(0,0,0,0.3);">${slide.title}</h1>
-                            <div style="width: 150px; height: 2px; background: rgba(255,255,255,0.3); margin: 10px auto 20px auto;"></div>
+                        <div style="text-align:center; padding: 20px 40px; z-index:2; display:flex; flex-direction:column; align-items:center; width:100%; box-sizing:border-box;">
+                            <h1 contenteditable="true" onblur="syncSlideContent(${index}, 'title', this.innerText)" style="font-family:var(--font-serif); font-size: 36px; margin-bottom: 15px; text-shadow:0 2px 4px rgba(0,0,0,0.3); color:white; outline:none; cursor:text;">${slide.title}</h1>
+                            <div style="width: 150px; height: 2px; background: rgba(255,255,255,0.3); margin: 5px auto 15px auto;"></div>
                             ${expertsHtml}
+                            ${transitionSelector}
                         </div>
                     `;
                 } else if (slide.type === 'bio') {
                     let p = state.people.find(x => x.id === slide.personId);
+                    
+                    let bioSelectorHtml = `
+                        <div style="margin-bottom: 15px; text-align: left; width: 85%; z-index: 5;">
+                            <span style="font-size: 13px; color: #bbdefb; font-weight: bold; margin-right: 8px;">展示专家:</span>
+                            <select onchange="syncSlideContent(${index}, 'personId', this.value); rebuildSlides();" style="font-size: 12px; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.2); color: white; cursor: pointer;">
+                                <option value="">-- 选择显示专家 --</option>
+                                ${state.people.map(x => `<option value="${x.id}" ${p && x.id === p.id ? 'selected' : ''} style="color: black;">${x.name} (${ROLE_NAMES[x.role] || x.role})</option>`).join('')}
+                            </select>
+                        </div>
+                    `;
+                    
                     if (p) {
                         let bioItems = (p.bio ? p.bio.split(/[;\n；\r]+/) : []).map(x => x.trim()).filter(Boolean);
                         const layoutOpts = getBioLayoutOptions(bioItems);
@@ -1832,31 +2075,42 @@
                         const avatarHtml = p.avatarUrl 
                             ? `<img src="${p.avatarUrl}" style="width: 140px; height: 193px; border-radius: 4px; object-fit: cover; border: 4px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: inline-block;">`
                             : `<div style="width: 140px; height: 193px; border-radius: 4px; background:${getAvatarColor(p.name)}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 54px; border: 4px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">${p.name ? p.name.charAt(0) : '?'}</div>`;
-
+                        
                         content = `
-                            <div style="display:flex; width: 85%; align-items: flex-start; gap: 35px; z-index:2;">
-                                <div style="text-align:center; width: 170px; flex-shrink:0; display:flex; flex-direction:column; align-items:center;">
-                                    ${avatarHtml}
-                                    <h2 style="margin:10px 0 5px 0; font-size:22px; color: white; white-space: nowrap;">${p.name} 教授</h2>
-                                    <div style="font-size:13px; color:#bbdefb; font-weight:normal; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:170px;" title="${hospital || '专家'}">${hospital || '专家'}</div>
-                                </div>
-                                <div style="flex:1; border-left: 2px solid rgba(255,255,255,0.2); padding-left: 30px; text-align:left;">
-                                    <h3 style="margin-top:0; font-size: 18px; color:#bbdefb; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px; margin-bottom:10px;">专家简介</h3>
-                                    <ul style="font-size:${layoutOpts.fontSize}px; line-height:1.5; padding-left: 20px; margin: 0; color:white;">
-                                        ${bioListHtml || '<li>暂无详细学术头衔介绍</li>'}
-                                    </ul>
+                            <div style="width: 100%; display: flex; flex-direction: column; align-items: center; z-index: 2;">
+                                ${bioSelectorHtml}
+                                <div style="display:flex; width: 85%; align-items: flex-start; gap: 35px;">
+                                    <div style="text-align:center; width: 170px; flex-shrink:0; display:flex; flex-direction:column; align-items:center;">
+                                        ${avatarHtml}
+                                        <h2 style="margin:10px 0 5px 0; font-size:22px; color: white; white-space: nowrap;">${p.name} 教授</h2>
+                                        <div style="font-size:13px; color:#bbdefb; font-weight:normal; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:170px;" title="${hospital || '专家'}">${hospital || '专家'}</div>
+                                    </div>
+                                    <div style="flex:1; border-left: 2px solid rgba(255,255,255,0.2); padding-left: 30px; text-align:left;">
+                                        <h3 style="margin-top:0; font-size: 18px; color:#bbdefb; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px; margin-bottom:10px;">专家简介</h3>
+                                        <ul style="font-size:${layoutOpts.fontSize}px; line-height:1.5; padding-left: 20px; margin: 0; color:white;">
+                                            ${bioListHtml || '<li>暂无详细学术头衔介绍</li>'}
+                                        </ul>
+                                    </div>
                                 </div>
                             </div>
                         `;
                     } else {
-                        content = `<h2>专家简介</h2><p>未找到专家信息</p>`;
+                        content = `
+                            <div style="width: 100%; display: flex; flex-direction: column; align-items: center; z-index: 2;">
+                                ${bioSelectorHtml}
+                                <div style="text-align:center; color: white; padding: 40px;">
+                                    <h3 style="color:#bbdefb;">👤 暂无选定嘉宾</h3>
+                                    <p style="font-size: 0.9rem; opacity:0.8;">请在上方下拉菜单中选择需要在本页展示的专家信息。</p>
+                                </div>
+                            </div>
+                        `;
                     }
                 } else if (slide.type === 'discussion_panel') {
                     let hosts = [];
                     if (slide.hostId) {
                         hosts = slide.hostId.split(',').map(id => state.people.find(p => p.id === id)).filter(Boolean);
                     }
-                    let discussants = state.people.filter(p => slide.discussantIds.includes(p.id));
+                    let discussants = state.people.filter(p => slide.discussantIds && slide.discussantIds.includes(p.id));
                     
                     let discussantsHtml = '';
                     const N = discussants.length;
@@ -1897,14 +2151,30 @@
                                 }).join('')}
                             </div>
                             `;
-                        }
-                    } else {
-                        discussantsHtml = '<div style="opacity:0.5; color:white;">暂无讨论嘉宾</div>';
+                    } } else {
+                        discussantsHtml = '<div style="opacity:0.5; color:white; font-size: 0.9rem; text-align: center; padding: 20px;">暂无选定讨论嘉宾，请在下方选择面板中勾选。</div>';
                     }
-
+                    
+                    let discussantsSelectHtml = `
+                        <div style="margin-top: 15px; background: rgba(255,255,255,0.15); padding: 8px 15px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); width: 100%; box-sizing: border-box; text-align: left;">
+                            <div style="font-size: 12px; color: #bbdefb; font-weight: bold; margin-bottom: 6px;">💬 选择讨论嘉宾 (可多选):</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px;">
+                                ${state.people.map(x => {
+                                    const checked = slide.discussantIds && slide.discussantIds.includes(x.id) ? 'checked' : '';
+                                    return `
+                                        <label style="display: flex; align-items: center; gap: 3px; cursor: pointer; color: white;">
+                                            <input type="checkbox" value="${x.id}" ${checked} onchange="toggleSlideDiscussant(${index}, '${x.id}')">
+                                            ${x.name}
+                                        </label>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                    
                     content = `
-                        <h2 style="font-family:var(--font-serif); font-size: 28px; margin-bottom: 15px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 8px; width: 85%;">讨论环节</h2>
-                        <div style="display:flex; flex-direction:column; align-items:center; width: 85%; gap: 15px; z-index:2;">
+                        <h2 style="font-family:var(--font-serif); font-size: 28px; margin-bottom: 15px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 8px; width: 85%; color:white; text-align:left;">讨论环节</h2>
+                        <div style="display:flex; flex-direction:column; align-items:center; width: 85%; gap: 10px; z-index:2;">
                             ${hosts.length > 0 ? `
                             <div style="background:rgba(255,255,255,0.15); border-radius:6px; padding:8px 15px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; width: 100%; border: 1px solid rgba(255,255,255,0.25); text-align:left; box-sizing:border-box;">
                                 <strong style="color:#bbdefb; font-size:13px;">主持嘉宾：</strong>
@@ -1921,6 +2191,14 @@
                                 <div style="color:#bbdefb; font-weight:bold; font-size:13px; margin-bottom: 8px; text-align:left;">讨论嘉宾：</div>
                                 ${discussantsHtml}
                             </div>
+                            ${discussantsSelectHtml}
+                        </div>
+                    `;
+                } else if (slide.type === 'custom') {
+                    content = `
+                        <div style="text-align:left; padding: 20px 40px; width: 85%; z-index:2; box-sizing:border-box;">
+                            <h1 contenteditable="true" onblur="syncSlideContent(${index}, 'title', this.innerText)" style="font-family:var(--font-serif); font-size: 36px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 10px; margin-bottom: 20px; text-shadow:0 2px 4px rgba(0,0,0,0.3); color:white; outline:none; cursor:text;">${slide.title || '自定义标题'}</h1>
+                            <div contenteditable="true" onblur="syncSlideContent(${index}, 'content', this.innerHTML)" style="font-size:18px; line-height:1.6; min-height: 200px; outline:none; cursor:text; color:white;">${slide.content || '请输入自定义页面内容...'}</div>
                         </div>
                     `;
                 }
@@ -2491,20 +2769,109 @@
             let inferredName = filename.replace(/\.[^/.]+$/, ""); // strip extension
             inferredName = inferredName.replace(/(简介|简历|介绍|介绍页|个人介绍|的个人介绍)$/, "").trim();
             
-            // Check if the first line already contains a name separator (colon)
-            const lines = trimmedText.split('\n').map(l => l.trim()).filter(Boolean);
-            if (lines.length === 0) return '';
+            // Normalize newlines
+            let cleanText = trimmedText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
             
-            const firstLine = lines[0];
-            const hasColon = /[:：]/.test(firstLine);
+            // Split into paragraphs to analyze
+            let paragraphs = cleanText.split(/\n+/).map(p => p.trim()).filter(Boolean);
+            if (paragraphs.length === 0) return '';
             
-            // If it has a colon, or if the first line is exactly the inferredName, or if the first line is very short (likely a name)
-            if (hasColon || firstLine === inferredName || (firstLine.length <= 4 && lines.length > 1)) {
-                return trimmedText;
+            // Determine if this file contains multiple experts or just one
+            let colonParagraphsCount = 0;
+            paragraphs.forEach(p => {
+                const colonIdx = p.search(/[：:]/);
+                if (colonIdx > 0 && colonIdx <= 4) {
+                    colonParagraphsCount++;
+                }
+            });
+            
+            const isSingleExpert = colonParagraphsCount <= 1 || inferredName.length <= 4;
+            
+            if (isSingleExpert) {
+                // Collapse all paragraphs into a single block with single newlines
+                let firstPara = paragraphs[0];
+                const colonIdx = firstPara.search(/[：:]/);
+                let firstParaName = '';
+                if (colonIdx !== -1) {
+                    firstParaName = firstPara.substring(0, colonIdx).trim();
+                }
+                
+                if (firstParaName === inferredName || firstPara === inferredName) {
+                    return paragraphs.join('\n');
+                } else {
+                    return `${inferredName}：\n${paragraphs.join('\n')}`;
+                }
+            } else {
+                let blocks = [];
+                let currentBlock = [];
+                
+                paragraphs.forEach(p => {
+                    const colonIdx = p.search(/[：:]/);
+                    if (colonIdx > 0 && colonIdx <= 6) { 
+                        if (currentBlock.length > 0) {
+                            blocks.push(currentBlock.join('\n'));
+                        }
+                        currentBlock = [p];
+                    } else {
+                        currentBlock.push(p);
+                    }
+                });
+                if (currentBlock.length > 0) {
+                    blocks.push(currentBlock.join('\n'));
+                }
+                return blocks.join('\n\n');
             }
-            
-            // Otherwise, wrap it as Name：Text
-            return `${inferredName}：${trimmedText}`;
+        }
+
+        function parsePptxBioFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    const arrayBuffer = evt.target.result;
+                    JSZip.loadAsync(arrayBuffer)
+                        .then(function(zip) {
+                            const slideKeys = Object.keys(zip.files)
+                                .filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+                                .sort((a, b) => {
+                                    const numA = parseInt(a.match(/\d+/)[0], 10);
+                                    const numB = parseInt(b.match(/\d+/)[0], 10);
+                                    return numA - numB;
+                                });
+                            
+                            if (slideKeys.length === 0) {
+                                resolve('');
+                                return;
+                            }
+                            
+                            const slidePromises = slideKeys.map(key => {
+                                return zip.file(key).async("string").then(xmlText => {
+                                    const parser = new DOMParser();
+                                    const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                                    const textNodes = xmlDoc.getElementsByTagName("a:t");
+                                    let slideTextList = [];
+                                    for (let i = 0; i < textNodes.length; i++) {
+                                        const txt = textNodes[i].textContent.trim();
+                                        if (txt) slideTextList.push(txt);
+                                    }
+                                    return slideTextList.join(' ');
+                                });
+                            });
+                            
+                            Promise.all(slidePromises).then(slideTexts => {
+                                const fullText = slideTexts.filter(t => t.trim()).join('\n\n');
+                                const formatted = formatParsedBio(file.name, fullText);
+                                resolve(formatted);
+                            }).catch(err => {
+                                reject(new Error(`读取幻灯片内容失败: ${err.message}`));
+                            });
+                        })
+                        .catch(function(err) {
+                            reject(new Error(`解压 PPTX 失败: ${err.message}`));
+                        });
+                };
+                reader.onerror = () => reject(new Error("读取 PPTX 文件失败"));
+                reader.readAsArrayBuffer(file);
+            });
         }
 
         function parseSingleBioFile(file) {
@@ -2574,6 +2941,8 @@
                     };
                     reader.onerror = () => reject(new Error("读取 Word 失败"));
                     reader.readAsArrayBuffer(file);
+                } else if (extension === 'pptx') {
+                    parsePptxBioFile(file).then(resolve).catch(reject);
                 } else {
                     // txt, csv, etc.
                     reader.onload = function(evt) {
@@ -3501,15 +3870,15 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                     }
                     
                     if (slideObj.type === 'cover') {
-                        slide.addText(state.meta.title, {
+                        slide.addText(slideObj.title || state.meta.title, {
                             x: 1.0, y: 1.8, w: 11.33, h: 1.2,
                             align: 'center', fontSize: 48, bold: true, color: 'ffffff', fontFace: 'Microsoft YaHei'
                         });
-                        slide.addText(state.meta.subtitle, {
+                        slide.addText(slideObj.subtitle || state.meta.subtitle, {
                             x: 1.0, y: 3.2, w: 11.33, h: 0.8,
                             align: 'center', fontSize: 24, color: 'bbdefb', fontFace: 'Microsoft YaHei'
                         });
-                        slide.addText(state.meta.date, {
+                        slide.addText(slideObj.date || state.meta.date, {
                             x: 1.0, y: 4.6, w: 11.33, h: 0.6,
                             align: 'center', fontSize: 20, color: 'ffffff', opacity: 0.8, fontFace: 'Microsoft YaHei'
                         });
@@ -3817,6 +4186,30 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                             }
                         }
                     }
+                    else if (slideObj.type === 'custom') {
+                        slide.addText(slideObj.title || '自定义标题', {
+                            x: 1.0, y: 0.8, w: 11.33, h: 0.8,
+                            fontSize: 28, bold: true, color: 'ffffff', fontFace: 'Microsoft YaHei'
+                        });
+                        
+                        slide.addShape(pptx.shapes.RECTANGLE, {
+                            x: 1.0, y: 1.6, w: 11.33, h: 0.02,
+                            fill: { color: 'ffffff', transparency: 70 },
+                            line: { width: 0 }
+                        });
+                        
+                        let contentText = (slideObj.content || '')
+                            .replace(/<br\s*\/?>/gi, '\n')
+                            .replace(/<\/p>/gi, '\n')
+                            .replace(/<[^>]+>/g, '')
+                            .trim();
+                        
+                        slide.addText(contentText, {
+                            x: 1.0, y: 1.9, w: 11.33, h: 4.8,
+                            fontSize: 16, color: 'ffffff', fontFace: 'Microsoft YaHei',
+                            align: 'left', valign: 'top', lineSpacing: 1.4
+                        });
+                    }
                 }
 
                 await pptx.writeFile({ fileName: state.meta.title + '_会议串场.pptx' });
@@ -3937,6 +4330,11 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
             document.getElementById('thumbnail-strip').style.display = isAi ? 'none' : 'flex';
             document.getElementById('slide-canvas').style.display = isAi ? 'none' : 'flex';
             document.getElementById('slide-nav').style.display = isAi ? 'none' : 'flex';
+            
+            const opsToolbar = document.getElementById('slide-ops-toolbar');
+            if (opsToolbar) {
+                opsToolbar.style.display = isAi ? 'none' : 'flex';
+            }
             
             document.getElementById('ai-thumbnail-strip').style.display = isAi ? 'flex' : 'none';
             document.getElementById('ai-slide-canvas').style.display = isAi ? 'flex' : 'none';
