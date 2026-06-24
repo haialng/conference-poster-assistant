@@ -1460,6 +1460,8 @@
                         title: item.title,
                         subtitle: (speakers.length > 0 ? speakers.map(s => `${s.name} ${ROLE_NAMES[s.role] || ''}`).join('、') : '') + 
                                   (hosts.length > 0 ? ` / 主持: ${hosts.map(h => h.name).join('、')}` : ''),
+                        speakers: speakers.map(s => ({ id: s.id, name: s.name, bio: s.bio, role: s.role })),
+                        hosts: hosts.map(h => ({ id: h.id, name: h.name, bio: h.bio, role: h.role })),
                         theme: state.template || 'blue'
                     });
                     
@@ -1475,6 +1477,8 @@
                         title: item.title,
                         subtitle: speakerNames,
                         hostText: hostText,
+                        speakers: speakers.map(s => ({ id: s.id, name: s.name, bio: s.bio, role: s.role })),
+                        hosts: hosts.map(h => ({ id: h.id, name: h.name, bio: h.bio, role: h.role })),
                         theme: state.template || 'blue'
                     });
                     
@@ -1488,6 +1492,8 @@
                         type: 'transition',
                         title: item.title,
                         subtitle: hosts.length > 0 ? `主持: ${hosts.map(h => h.name).join('、')}` : '讨论环节',
+                        speakers: [],
+                        hosts: hosts.map(h => ({ id: h.id, name: h.name, bio: h.bio, role: h.role })),
                         theme: state.template || 'blue'
                     });
                     
@@ -1694,11 +1700,34 @@
                         <div id="slide-agenda-preview" style="font-size:16px; text-align:left; width: 85%;"></div>
                     `;
                 } else if (slide.type === 'transition') {
+                    const experts = [...(slide.speakers || []), ...(slide.hosts || [])];
+                    let expertsHtml = '';
+                    if (experts.length > 0) {
+                        expertsHtml = `
+                        <div style="display:flex; justify-content:center; gap:40px; margin-top:40px; width:85%; flex-wrap:wrap;">
+                            ${experts.map(p => {
+                                const hospital = p.bio ? p.bio.split(/[，,]/)[0].trim() : '';
+                                return `
+                                <div style="text-align:center;">
+                                    <div style="font-size: 20px; font-weight: bold; color: #bbdefb; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${p.name} 教授</div>
+                                    <div style="font-size: 13px; opacity: 0.8; margin-top: 5px; color: white;">${hospital || '专家'}</div>
+                                </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        `;
+                    } else {
+                        expertsHtml = `
+                        <h2 style="color:#bbdefb; font-size: 22px; font-weight: normal; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${slide.subtitle || ''}</h2>
+                        ${slide.hostText ? `<h3 style="margin-top: 30px; opacity: 0.9; font-weight: normal; font-size:16px;">${slide.hostText}</h3>` : ''}
+                        `;
+                    }
+
                     content = `
-                        <div style="text-align:center; padding: 40px; z-index:2;">
-                            <h1 style="font-family:var(--font-serif); font-size: 38px; margin-bottom: 20px; text-shadow:0 2px 4px rgba(0,0,0,0.3);">${slide.title}</h1>
-                            <h2 style="color:#bbdefb; font-size: 22px; font-weight: normal; text-shadow:0 1px 2px rgba(0,0,0,0.3);">${slide.subtitle || ''}</h2>
-                            ${slide.hostText ? `<h3 style="margin-top: 30px; opacity: 0.9; font-weight: normal; font-size:16px;">${slide.hostText}</h3>` : ''}
+                        <div style="text-align:center; padding: 40px; z-index:2; display:flex; flex-direction:column; align-items:center; width:100%; box-sizing:border-box;">
+                            <h1 style="font-family:var(--font-serif); font-size: 36px; margin-bottom: 20px; text-shadow:0 2px 4px rgba(0,0,0,0.3);">${slide.title}</h1>
+                            <div style="width: 150px; height: 2px; background: rgba(255,255,255,0.3); margin: 10px auto 20px auto;"></div>
+                            ${expertsHtml}
                         </div>
                     `;
                 } else if (slide.type === 'bio') {
@@ -1707,15 +1736,20 @@
                         let bioItems = (p.bio ? p.bio.split(/[;\n；\r]+/) : []).map(x => x.trim()).filter(Boolean);
                         const layoutOpts = getBioLayoutOptions(bioItems);
                         let bioListHtml = bioItems.map(item => `<li style="margin-bottom:${layoutOpts.marginBottom}px;">${item}</li>`).join('');
-                        const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
+                        const hospital = p.bio ? p.bio.split(/[，,]/)[0].trim() : '';
+                        
+                        const avatarHtml = p.avatarUrl 
+                            ? `<img src="${p.avatarUrl}" style="width: 140px; height: 193px; border-radius: 4px; object-fit: cover; border: 4px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display: inline-block;">`
+                            : `<div style="width: 140px; height: 193px; border-radius: 4px; background:${getAvatarColor(p.name)}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 54px; border: 4px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">${p.name ? p.name.charAt(0) : '?'}</div>`;
+
                         content = `
-                            <div style="display:flex; width: 85%; align-items: flex-start; gap: 30px; z-index:2;">
-                                <div style="text-align:center; width: 200px; flex-shrink:0;">
-                                    ${getSquareAvatarHtml(p, 140, '4px solid white', 'margin-bottom:12px; margin-left:auto; margin-right:auto;')}
-                                    <h2 style="margin:5px 0; font-size:24px;">${p.name}</h2>
-                                    <div style="font-size:14px; color:#bbdefb; font-weight:normal; margin-top:5px;">${hospital || '专家'}</div>
+                            <div style="display:flex; width: 85%; align-items: flex-start; gap: 35px; z-index:2;">
+                                <div style="text-align:center; width: 170px; flex-shrink:0; display:flex; flex-direction:column; align-items:center;">
+                                    ${avatarHtml}
+                                    <h2 style="margin:10px 0 5px 0; font-size:22px; color: white; white-space: nowrap;">${p.name} 教授</h2>
+                                    <div style="font-size:13px; color:#bbdefb; font-weight:normal; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:170px;" title="${hospital || '专家'}">${hospital || '专家'}</div>
                                 </div>
-                                <div style="flex:1; border-left: 2px solid rgba(255,255,255,0.2); padding-left: 25px; text-align:left;">
+                                <div style="flex:1; border-left: 2px solid rgba(255,255,255,0.2); padding-left: 30px; text-align:left;">
                                     <h3 style="margin-top:0; font-size: 18px; color:#bbdefb; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px; margin-bottom:10px;">专家简介</h3>
                                     <ul style="font-size:${layoutOpts.fontSize}px; line-height:1.5; padding-left: 20px; margin: 0; color:white;">
                                         ${bioListHtml || '<li>暂无详细学术头衔介绍</li>'}
@@ -1733,33 +1767,68 @@
                     }
                     let discussants = state.people.filter(p => slide.discussantIds.includes(p.id));
                     
-                    let discussantsHtml = discussants.map(p => `
-                        <div style="background:rgba(255,255,255,0.15); border-radius:6px; padding:8px 12px; display:flex; align-items:center; gap:10px; min-width: 180px; box-shadow:0 3px 8px rgba(0,0,0,0.1);">
-                            ${getAvatarHtml(p, 36, '2px solid white', 'flex-shrink:0;')}
-                            <div style="text-align:left;">
-                                <div style="font-weight:bold; font-size:14px; color:white;">${p.name}</div>
-                                <div style="font-size:11px; opacity:0.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:120px; color:white;" title="${p.bio || ''}">${p.bio || ''}</div>
+                    let discussantsHtml = '';
+                    const N = discussants.length;
+                    if (N > 0) {
+                        if (N <= 5) {
+                            discussantsHtml = `
+                            <div style="display:flex; justify-content:center; gap:20px; width:100%;">
+                                ${discussants.map(p => {
+                                    const hospital = p.bio ? p.bio.split(/[，,]/)[0].trim() : '';
+                                    const imgHtml = p.avatarUrl 
+                                        ? `<img src="${p.avatarUrl}" style="width: 85px; height: 118px; border-radius: 4px; object-fit: cover; border: 2px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.15);">`
+                                        : `<div style="width: 85px; height: 118px; border-radius: 4px; background:${getAvatarColor(p.name)}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 32px; border: 2px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.15);">${p.name ? p.name.charAt(0) : '?'}</div>`;
+                                    return `
+                                    <div style="text-align:center; width: 100px;">
+                                        ${imgHtml}
+                                        <div style="font-weight:bold; font-size:13px; color:white; margin-top:8px;">${p.name} 教授</div>
+                                        <div style="font-size:9px; color:#bbdefb; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${hospital || '专家'}">${hospital || '专家'}</div>
+                                    </div>
+                                    `;
+                                }).join('')}
                             </div>
-                        </div>
-                    `).join('');
-                    
+                            `;
+                        } else {
+                            discussantsHtml = `
+                            <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:12px 18px; width:100%;">
+                                ${discussants.map(p => {
+                                    const hospital = p.bio ? p.bio.split(/[，,]/)[0].trim() : '';
+                                    const imgHtml = p.avatarUrl 
+                                        ? `<img src="${p.avatarUrl}" style="width: 54px; height: 75px; border-radius: 3px; object-fit: cover; border: 1.5px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">`
+                                        : `<div style="width: 54px; height: 75px; border-radius: 3px; background:${getAvatarColor(p.name)}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; border: 1.5px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">${p.name ? p.name.charAt(0) : '?'}</div>`;
+                                    return `
+                                    <div style="text-align:center; width: 70px;">
+                                        ${imgHtml}
+                                        <div style="font-weight:bold; font-size:11px; color:white; margin-top:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.name} 教授</div>
+                                        <div style="font-size:8px; color:#bbdefb; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${hospital || '专家'}">${hospital || '专家'}</div>
+                                    </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                            `;
+                        }
+                    } else {
+                        discussantsHtml = '<div style="opacity:0.5; color:white;">暂无讨论嘉宾</div>';
+                    }
+
                     content = `
                         <h2 style="font-family:var(--font-serif); font-size: 28px; margin-bottom: 15px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 8px; width: 85%;">讨论环节</h2>
                         <div style="display:flex; flex-direction:column; align-items:center; width: 85%; gap: 15px; z-index:2;">
                             ${hosts.length > 0 ? `
-                            <div style="background:rgba(255,255,255,0.2); border-radius:6px; padding:8px 15px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; width: fit-content; border: 1px solid rgba(255,255,255,0.3); text-align:left;">
-                                <strong style="color:#bbdefb; font-size:14px;">主持嘉宾：</strong>
-                                ${hosts.map(h => `
-                                    <span style="font-weight:bold; font-size:16px; color:white;">${h.name}</span>
-                                    <span style="font-size:12px; opacity:0.9; margin-right: 15px; color:white;">${h.bio ? h.bio.split(/[，,]/)[0] : ''}</span>
-                                `).join('')}
+                            <div style="background:rgba(255,255,255,0.15); border-radius:6px; padding:8px 15px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; width: 100%; border: 1px solid rgba(255,255,255,0.25); text-align:left; box-sizing:border-box;">
+                                <strong style="color:#bbdefb; font-size:13px;">主持嘉宾：</strong>
+                                ${hosts.map(h => {
+                                    const hHosp = h.bio ? h.bio.split(/[，,]/)[0].trim() : '';
+                                    return `
+                                    <span style="font-weight:bold; font-size:14px; color:white;">${h.name} 教授</span>
+                                    <span style="font-size:11px; opacity:0.9; margin-right: 15px; color:#bbdefb;">(${hHosp || '专家'})</span>
+                                    `;
+                                }).join('')}
                             </div>` : ''}
                             
                             <div style="width: 100%;">
-                                <div style="color:#bbdefb; font-weight:bold; font-size:14px; margin-bottom: 8px; text-align:left;">讨论嘉宾：</div>
-                                <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center;">
-                                    ${discussantsHtml || '<div style="opacity:0.5; color:white;">暂无讨论嘉宾</div>'}
-                                </div>
+                                <div style="color:#bbdefb; font-weight:bold; font-size:13px; margin-bottom: 8px; text-align:left;">讨论嘉宾：</div>
+                                ${discussantsHtml}
                             </div>
                         </div>
                     `;
@@ -2792,6 +2861,29 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
         }
 
         // --- Export Module ---
+        function getCircularAvatarBase64(squareBase64) {
+            return new Promise((resolve) => {
+                if (!squareBase64) return resolve(null);
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 160;
+                    canvas.height = 160;
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, 160, 160);
+                    ctx.beginPath();
+                    ctx.arc(80, 80, 80, 0, Math.PI * 2);
+                    ctx.clip();
+                    ctx.drawImage(img, 0, 0, 160, 160);
+                    resolve(canvas.toDataURL('image/png'));
+                };
+                img.onerror = function() {
+                    resolve(null);
+                };
+                img.src = squareBase64;
+            });
+        }
+
         async function exportPosterPPT(e) {
             const ev = e || window.event;
             const btn = ev ? ev.target : null;
@@ -3037,6 +3129,7 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                 });
 
                 let rows = [];
+                const borderOpt = { bottom: { style: 'thin', color: 'dddddd' } };
                 rows.push([
                     { text: '时间', options: { bold: true, color: 'ffffff', fontSize: 8, fontFace: 'Microsoft YaHei', fill: { color: 'ffffff', transparency: 100 } } },
                     { text: '内容', options: { bold: true, color: 'ffffff', fontSize: 8, fontFace: 'Microsoft YaHei', fill: { color: 'ffffff', transparency: 100 } } },
@@ -3079,17 +3172,18 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                                     color: '1565c0', 
                                     fontSize: 8, 
                                     fontFace: 'Microsoft YaHei',
-                                    fill: 'e3f2fd',
-                                    align: 'left'
+                                    fill: { color: 'e3f2fd' },
+                                    align: 'left',
+                                    border: borderOpt
                                 } 
                             }
                         ]);
                     }
                     
                     let row = [
-                        { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: primaryColorHex, fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
-                        { text: a.title, options: { bold: true, color: '333333', fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
-                        { text: speakerName || '--', options: { color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei' } }
+                        { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: primaryColorHex, fontSize: 7.5, fontFace: 'Microsoft YaHei', border: borderOpt } },
+                        { text: a.title, options: { bold: true, color: '333333', fontSize: 7.5, fontFace: 'Microsoft YaHei', border: borderOpt } },
+                        { text: speakerName || '--', options: { color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei', border: borderOpt } }
                     ];
                     
                     rows.push(row);
@@ -3099,7 +3193,6 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                     x: 0.39, y: currentY, w: 3.8,
                     colW: [0.9, 1.9, 1.0],
                     fontSize: 7.5,
-                    border: { type: 'solid', color: 'dddddd', size: 1 },
                     valign: 'middle'
                 });
 
@@ -3153,6 +3246,11 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                 let pptx = new PptxGenJS();
                 pptx.layout = 'LAYOUT_16x9';
 
+                const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
+                const primaryColorHex = theme.primary.replace('#', '');
+                const lightColorHex = theme.light.replace('#', '');
+                const midColorHex = theme.mid.replace('#', '');
+
                 for(let i = 1; i < slideList.length; i++) {
                     const slideObj = slideList[i];
                     let slide = pptx.addSlide();
@@ -3160,12 +3258,11 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                     if (state.meta.slideBg) {
                         slide.background = { data: state.meta.slideBg };
                     } else {
-                        const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
-                        slide.background = { fill: theme.primary.replace('#', '') };
+                        slide.background = { fill: primaryColorHex };
                         
                         slide.addShape(pptx.shapes.RIGHT_TRIANGLE, {
                             x: 5.0, y: 0.0, w: 5.0, h: 5.625,
-                            fill: { color: theme.mid.replace('#', ''), transparency: 75 },
+                            fill: { color: midColorHex, transparency: 75 },
                             flipH: true,
                             line: { width: 0 }
                         });
@@ -3173,29 +3270,29 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                     
                     if (slideObj.type === 'cover') {
                         slide.addText(state.meta.title, {
-                            x: 0.5, y: 1.5, w: 9.0, h: 1.0,
-                            align: 'center', fontSize: 32, bold: true, color: 'ffffff'
+                            x: 1.0, y: 1.8, w: 11.33, h: 1.2,
+                            align: 'center', fontSize: 48, bold: true, color: 'ffffff', fontFace: 'Microsoft YaHei'
                         });
                         slide.addText(state.meta.subtitle, {
-                            x: 0.5, y: 2.6, w: 9.0, h: 0.8,
-                            align: 'center', fontSize: 18, color: 'bbdefb'
+                            x: 1.0, y: 3.2, w: 11.33, h: 0.8,
+                            align: 'center', fontSize: 24, color: 'bbdefb', fontFace: 'Microsoft YaHei'
                         });
                         slide.addText(state.meta.date, {
-                            x: 0.5, y: 4.0, w: 9.0, h: 0.5,
-                            align: 'center', fontSize: 13, color: 'ffffff', opacity: 0.8
+                            x: 1.0, y: 4.6, w: 11.33, h: 0.6,
+                            align: 'center', fontSize: 20, color: 'ffffff', opacity: 0.8, fontFace: 'Microsoft YaHei'
                         });
                     }
                     else if (slideObj.type === 'agenda') {
                         slide.addText('会议日程', {
-                            x: 1.0, y: 0.5, w: 8.0, h: 0.6,
-                            fontSize: 24, bold: true, color: 'ffffff'
+                            x: 1.0, y: 0.5, w: 11.33, h: 0.6,
+                            fontSize: 24, bold: true, color: 'ffffff', fontFace: 'Microsoft YaHei'
                         });
                         
                         let rows = [];
                         rows.push([
-                            { text: '时间', options: { bold: true, color: 'bbdefb', fontSize: 13 } },
-                            { text: '内容', options: { bold: true, color: 'bbdefb', fontSize: 13 } },
-                            { text: '讲者', options: { bold: true, color: 'bbdefb', fontSize: 13 } }
+                            { text: '时间', options: { bold: true, color: 'ffffff', fontSize: 13, fontFace: 'Microsoft YaHei', fill: { color: '1565c0' } } },
+                            { text: '内容', options: { bold: true, color: 'ffffff', fontSize: 13, fontFace: 'Microsoft YaHei', fill: { color: '1565c0' } } },
+                            { text: '讲者', options: { bold: true, color: 'ffffff', fontSize: 13, fontFace: 'Microsoft YaHei', fill: { color: '1565c0' } } }
                         ]);
                         
                         const rowspans = calculateAgendaRowspans();
@@ -3235,6 +3332,8 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                                             bold: true, 
                                             color: 'bbdefb', 
                                             fontSize: 12, 
+                                            fontFace: 'Microsoft YaHei',
+                                            fill: { color: '1e88e5', transparency: 80 },
                                             valign: 'middle',
                                             align: 'left'
                                         } 
@@ -3243,88 +3342,87 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                             }
                             
                             let row = [
-                                { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: 'ffffff', fontSize: 11 } },
-                                { text: a.title, options: { bold: true, color: 'ffffff', fontSize: 11 } },
-                                { text: speakerName || '--', options: { color: 'ffffff', fontSize: 11 } }
+                                { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: 'ffffff', fontSize: 11, fontFace: 'Microsoft YaHei' } },
+                                { text: a.title, options: { bold: true, color: 'ffffff', fontSize: 11, fontFace: 'Microsoft YaHei' } },
+                                { text: speakerName || '--', options: { color: 'ffffff', fontSize: 11, fontFace: 'Microsoft YaHei' } }
                             ];
                             
                             rows.push(row);
                         });
                         
                         slide.addTable(rows, {
-                            x: 1.0, y: 1.3, w: 8.0,
-                            colW: [1.8, 4.4, 1.8],
+                            x: 1.0, y: 1.3, w: 11.33,
+                            colW: [2.2, 6.5, 2.63],
                             fontSize: 11,
                             border: { type: 'solid', color: 'ffffff', size: 1 }
                         });
                     }
                     else if (slideObj.type === 'transition') {
+                        const titleSize = slideObj.title.length > 8 ? 40 : 60;
+                        const titleY = slideObj.title.length > 8 ? 2.3 : 2.1;
+                        
                         slide.addText(slideObj.title, {
-                            x: 1.0, y: 1.6, w: 8.0, h: 1.0,
-                            align: 'center', fontSize: 30, bold: true, color: 'ffffff'
+                            x: 0.0, y: titleY, w: 13.33, h: 1.2,
+                            align: 'center', fontSize: titleSize, bold: true, color: 'ffffff', fontFace: 'Microsoft YaHei'
                         });
                         
-                        const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
-                        slide.addShape(pptx.shapes.RECTANGLE, {
-                            x: 3.5, y: 2.6, w: 3.0, h: 0.03,
-                            fill: { color: theme.light.replace('#', '') },
-                            line: { width: 0 }
-                        });
-
-                        slide.addText(slideObj.subtitle || '', {
-                            x: 1.0, y: 2.8, w: 8.0, h: 0.8,
-                            align: 'center', fontSize: 18, color: 'bbdefb'
-                        });
-                        if (slideObj.hostText) {
-                            slide.addText(slideObj.hostText, {
-                                x: 1.0, y: 3.8, w: 8.0, h: 0.5,
-                                align: 'center', fontSize: 14, color: 'ffffff', opacity: 0.9
+                        const experts = [...(slideObj.speakers || []), ...(slideObj.hosts || [])];
+                        if (experts.length > 0) {
+                            const N = experts.length;
+                            const colW = 13.33 / N;
+                            experts.forEach((p, k) => {
+                                const x = k * colW;
+                                const hospital = p.bio ? p.bio.split(/[，,]/)[0].trim() : '';
+                                slide.addText(p.name + ' 教授\n' + (hospital || '专家'), {
+                                    x: x, y: 3.99, w: colW, h: 3.51,
+                                    align: 'center', fontSize: 28, color: 'ffffff', bold: true, fontFace: 'Microsoft YaHei'
+                                });
                             });
                         }
                     }
                     else if (slideObj.type === 'bio') {
                         let p = state.people.find(x => x.id === slideObj.personId);
                         if (p) {
+                            const portraitX = 1.1;
+                            const portraitY = 1.4;
+                            const portraitW = 2.7;
+                            const portraitH = 3.7;
+
                             if (p.avatarUrl) {
                                 slide.addImage({
                                     data: p.avatarUrl,
-                                    x: 1.0, y: 0.8, w: 1.8, h: 1.8
+                                    x: portraitX, y: portraitY, w: portraitW, h: portraitH
                                 });
                             } else {
                                 const color = getAvatarColor(p.name).replace('#', '');
                                 slide.addShape(pptx.shapes.RECTANGLE, {
-                                    x: 1.0, y: 0.8, w: 1.8, h: 1.8,
+                                    x: portraitX, y: portraitY, w: portraitW, h: portraitH,
                                     fill: { color: color },
-                                    rectRadius: 0.05,
+                                    rectRadius: 0.03,
                                     line: { color: 'ffffff', width: 2 }
                                 });
                                 slide.addText(p.name ? p.name.charAt(0) : '?', {
-                                    x: 1.0, y: 0.8, w: 1.8, h: 1.8,
+                                    x: portraitX, y: portraitY, w: portraitW, h: portraitH,
                                     align: 'center', valign: 'middle',
-                                    fontSize: 48, bold: true, color: 'ffffff'
+                                    fontSize: 54, bold: true, color: 'ffffff'
                                 });
                             }
                             
-                            slide.addText(p.name, {
-                                x: 0.8, y: 2.8, w: 2.2, h: 0.5,
-                                align: 'center', fontSize: 22, bold: true, color: 'ffffff'
-                            });
-                            
-                            const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
-                            slide.addText(hospital || '专家', {
-                                x: 0.8, y: 3.4, w: 2.2, h: 0.4,
-                                align: 'center', fontSize: 12, color: 'bbdefb', bold: false
+                            const hospital = p.bio ? p.bio.split(/[，,]/)[0].trim() : '';
+                            slide.addText(p.name + ' 教授\n' + (hospital || '专家'), {
+                                x: 1.0, y: 5.3, w: 2.9, h: 1.4,
+                                align: 'center', fontSize: 20, bold: true, color: 'ffffff', fontFace: 'Microsoft YaHei'
                             });
 
                             slide.addShape(pptx.shapes.RECTANGLE, {
-                                x: 3.2, y: 0.8, w: 0.02, h: 3.8,
+                                x: 4.1, y: 1.1, w: 0.02, h: 5.8,
                                 fill: { color: 'ffffff', transparency: 70 },
                                 line: { width: 0 }
                             });
 
                             slide.addText('专家简介', {
-                                x: 3.5, y: 0.8, w: 5.7, h: 0.4,
-                                fontSize: 16, bold: true, color: 'bbdefb'
+                                x: 4.39, y: 0.8, w: 7.6, h: 0.4,
+                                fontSize: 16, bold: true, color: 'bbdefb', fontFace: 'Microsoft YaHei'
                             });
                             
                             let bioItems = p.bio ? p.bio.split(/[;\n；\r]+/) : [];
@@ -3333,17 +3431,17 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                             const layoutOpts = getBioLayoutOptions(cleanBioItems);
                             let bulletText = cleanBioItems.map(item => ({ 
                                 text: item, 
-                                options: { bullet: true, color: 'ffffff', fontSize: Math.round(layoutOpts.fontSize * 0.9) }
+                                options: { bullet: true, color: 'ffffff', fontSize: Math.round(layoutOpts.fontSize * 0.95) }
                             }));
                             if (bulletText.length > 0) {
                                 slide.addText(bulletText, {
-                                    x: 3.5, y: 1.3, w: 5.5, h: 3.3,
+                                    x: 4.39, y: 1.3, w: 7.6, h: 5.3,
                                     align: 'left', 
                                     lineSpacing: Math.round(layoutOpts.lineSpacing * 1.1)
                                 });
                             } else {
                                 slide.addText('暂无详细学术头衔介绍', {
-                                    x: 3.5, y: 1.3, w: 5.5, h: 1.0,
+                                    x: 4.39, y: 1.3, w: 7.6, h: 1.0,
                                     color: 'ffffff', fontSize: 12
                                 });
                             }
@@ -3357,91 +3455,135 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                         let discussants = state.people.filter(p => slideObj.discussantIds.includes(p.id));
                         
                         slide.addText('讨论环节', {
-                            x: 0.8, y: 0.4, w: 8.4, h: 0.5,
-                            fontSize: 24, bold: true, color: 'ffffff'
+                            x: 1.0, y: 0.5, w: 11.33, h: 0.6,
+                            fontSize: 24, bold: true, color: 'ffffff', fontFace: 'Microsoft YaHei'
                         });
                         
+                        let currentPanelY = 1.2;
                         if (hosts.length > 0) {
                             slide.addShape(pptx.shapes.RECTANGLE, {
-                                x: 1.5, y: 1.0, w: 7.0, h: 0.8,
-                                fill: { color: 'ffffff', transparency: 80 },
+                                x: 1.0, y: 1.2, w: 11.33, h: 0.7,
+                                fill: { color: 'ffffff', transparency: 85 },
                                 line: { color: 'ffffff', width: 1 }
                             });
                             
                             let textObjs = [{ text: '主持嘉宾：', options: { color: 'bbdefb', bold: true } }];
                             hosts.forEach((h, hIdx) => {
+                                const hHosp = h.bio ? h.bio.split(/[，,]/)[0].trim() : '';
                                 textObjs.push({ text: h.name, options: { color: 'ffffff', bold: true } });
-                                textObjs.push({ text: ' (' + (h.bio ? h.bio.split(/[，,]/)[0] : '') + ')', options: { color: 'ffffff', fontSize: 10 } });
+                                textObjs.push({ text: ' (' + (hHosp || '专家') + ')', options: { color: 'ffffff', fontSize: 10 } });
                                 if (hIdx < hosts.length - 1) {
                                     textObjs.push({ text: '、', options: { color: 'ffffff' } });
                                 }
                             });
                             
                             slide.addText(textObjs, {
-                                x: 1.6, y: 1.0, w: 6.8, h: 0.8,
-                                align: 'left', fontSize: 12
+                                x: 1.2, y: 1.2, w: 10.93, h: 0.7,
+                                align: 'left', fontSize: 12, valign: 'middle'
                             });
+                            currentPanelY = 2.1;
                         }
                         
                         slide.addText('讨论嘉宾：', {
-                            x: 0.8, y: 2.0, w: 8.4, h: 0.3,
-                            fontSize: 13, bold: true, color: 'bbdefb'
+                            x: 1.0, y: currentPanelY, w: 11.33, h: 0.3,
+                            fontSize: 13, bold: true, color: 'bbdefb', fontFace: 'Microsoft YaHei'
                         });
                         
-                        let startX = 0.8;
-                        let startY = 2.4;
-                        let cardW = 1.6;
-                        let cardH = 0.9;
-                        let gapX = 0.1;
-                        let gapY = 0.15;
-                        
-                        discussants.forEach((p, idx) => {
-                            let col = idx % 5;
-                            let row = Math.floor(idx / 5);
-                            let x = startX + col * (cardW + gapX);
-                            let y = startY + row * (cardH + gapY);
-                            
-                            slide.addShape(pptx.shapes.RECTANGLE, {
-                                x: x, y: y, w: cardW, h: cardH,
-                                fill: { color: 'ffffff', transparency: 85 },
-                                rectRadius: 0.05
-                            });
-                            
-                            const theme = THEMES[state.template || 'blue'] || THEMES['blue'];
-                            slide.addShape(pptx.shapes.RECTANGLE, {
-                                x: x, y: y, w: cardW, h: 0.04,
-                                fill: { color: theme.light.replace('#', '') },
-                                line: { width: 0 }
-                            });
-                            
-                            if (p.avatarUrl) {
-                                slide.addImage({
-                                    data: p.avatarUrl,
-                                    x: x + 0.08, y: y + 0.08, w: 0.32, h: 0.32
+                        const N = discussants.length;
+                        if (N > 0) {
+                            if (N <= 5) {
+                                const colW = 2.5;
+                                const leftMargin = (13.33 - N * colW) / 2;
+                                const photoW = 1.95;
+                                const photoH = 2.85;
+                                
+                                discussants.forEach((p, idx) => {
+                                    const colCenter = leftMargin + idx * colW + (colW / 2);
+                                    const x = colCenter - (photoW / 2);
+                                    const y = 2.1;
+                                    
+                                    if (p.avatarUrl) {
+                                        slide.addImage({
+                                            data: p.avatarUrl,
+                                            x: x, y: y, w: photoW, h: photoH
+                                        });
+                                    } else {
+                                        const color = getAvatarColor(p.name).replace('#', '');
+                                        slide.addShape(pptx.shapes.RECTANGLE, {
+                                            x: x, y: y, w: photoW, h: photoH,
+                                            fill: { color: color },
+                                            rectRadius: 0.03,
+                                            line: { color: 'ffffff', width: 1.5 }
+                                        });
+                                        slide.addText(p.name ? p.name.charAt(0) : '?', {
+                                            x: x, y: y, w: photoW, h: photoH,
+                                            align: 'center', valign: 'middle',
+                                            fontSize: 32, bold: true, color: 'ffffff'
+                                        });
+                                    }
+                                    
+                                    const hospital = p.bio ? p.bio.split(/[，,]/)[0].trim() : '';
+                                    const textW = 2.4;
+                                    const textX = colCenter - (textW / 2);
+                                    
+                                    slide.addText([
+                                        { text: p.name + ' 教授\n', options: { bold: true, fontSize: 16, color: 'ffffff' } },
+                                        { text: hospital || '专家', options: { fontSize: 12, color: 'bbdefb' } }
+                                    ], {
+                                        x: textX, y: 5.1, w: textW, h: 1.0,
+                                        align: 'center', fontFace: 'Microsoft YaHei', lineSpacing: 1.2
+                                    });
                                 });
                             } else {
-                                const color = getAvatarColor(p.name).replace('#', '');
-                                slide.addShape(pptx.shapes.OVAL, {
-                                    x: x + 0.08, y: y + 0.08, w: 0.32, h: 0.32,
-                                    fill: { color: color },
-                                    line: { color: 'ffffff', width: 1 }
-                                });
-                                slide.addText(p.name ? p.name.charAt(0) : '?', {
-                                    x: x + 0.08, y: y + 0.08, w: 0.32, h: 0.32,
-                                    align: 'center', valign: 'middle',
-                                    fontSize: 10, bold: true, color: 'ffffff'
+                                const perRow = Math.ceil(N / 2);
+                                const colW = 2.0;
+                                const photoW = 1.4;
+                                const photoH = 2.0;
+                                
+                                discussants.forEach((p, idx) => {
+                                    const r = Math.floor(idx / perRow);
+                                    const c = idx % perRow;
+                                    const rowN = r === 0 ? perRow : N - perRow;
+                                    
+                                    const leftMargin = (13.33 - rowN * colW) / 2;
+                                    const colCenter = leftMargin + c * colW + (colW / 2);
+                                    const x = colCenter - (photoW / 2);
+                                    const y = 1.3 + r * 2.8;
+                                    
+                                    if (p.avatarUrl) {
+                                        slide.addImage({
+                                            data: p.avatarUrl,
+                                            x: x, y: y, w: photoW, h: photoH
+                                        });
+                                    } else {
+                                        const color = getAvatarColor(p.name).replace('#', '');
+                                        slide.addShape(pptx.shapes.RECTANGLE, {
+                                            x: x, y: y, w: photoW, h: photoH,
+                                            fill: { color: color },
+                                            rectRadius: 0.03,
+                                            line: { color: 'ffffff', width: 1.5 }
+                                        });
+                                        slide.addText(p.name ? p.name.charAt(0) : '?', {
+                                            x: x, y: y, w: photoW, h: photoH,
+                                            align: 'center', valign: 'middle',
+                                            fontSize: 24, bold: true, color: 'ffffff'
+                                        });
+                                    }
+                                    
+                                    const hospital = p.bio ? p.bio.split(/[，,]/)[0].trim() : '';
+                                    const textW = 1.9;
+                                    const textX = colCenter - (textW / 2);
+                                    
+                                    slide.addText([
+                                        { text: p.name + ' 教授\n', options: { bold: true, fontSize: 12, color: 'ffffff' } },
+                                        { text: hospital || '专家', options: { fontSize: 9, color: 'bbdefb' } }
+                                    ], {
+                                        x: textX, y: y + photoH + 0.1, w: textW, h: 0.8,
+                                        align: 'center', fontFace: 'Microsoft YaHei', lineSpacing: 1.2
+                                    });
                                 });
                             }
-                            
-                            slide.addText(p.name, {
-                                x: x + 0.45, y: y + 0.08, w: cardW - 0.5, h: 0.2,
-                                fontSize: 10, bold: true, color: 'ffffff'
-                            });
-                            slide.addText(p.bio || '', {
-                                x: x + 0.08, y: y + 0.5, w: cardW - 0.16, h: 0.35,
-                                fontSize: 8, color: 'ffffff', opacity: 0.8
-                            });
-                        });
+                        }
                     }
                 }
 
