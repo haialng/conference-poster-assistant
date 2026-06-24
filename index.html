@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
             --primary-color: #0a3a6e;
@@ -626,6 +627,13 @@
             <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">输入专家姓名与简介。支持以下几种格式：<br>
             1. <strong>姓名：简介内容</strong>（如：张三：北京协和医院...）<br>
             2. <strong>姓名 简介内容</strong>（第一行姓名，后面为简介，专家之间用空行隔开）</p>
+            <div style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center;">
+                <button type="button" onclick="document.getElementById('bio-file-input').click()" style="padding: 6px 12px; background: #e8f5e9; border: 1px dashed #4caf50; border-radius: 4px; color: #2e7d32; cursor: pointer; font-size: 0.8rem; font-weight: bold; display: flex; align-items: center; gap: 4px;">
+                    📂 选择文件导入 (.txt / .csv / .xlsx)
+                </button>
+                <input type="file" id="bio-file-input" accept=".txt,.csv,.xlsx,.xls" style="display: none;" onchange="handleBioFileUpload(event)">
+                <span id="bio-file-status" style="font-size: 0.75rem; color: #666;"></span>
+            </div>
             <div class="form-group">
                 <textarea id="batch-bio-input" class="form-control" rows="12" placeholder="例如：
 张三：北京协和医院主任医师，教授，长期从事心血管内科工作。
@@ -2186,30 +2194,21 @@
                 
                 totalCount += groupPeople.length;
                 
-                const isDiscussant = role === 'discussant';
-                const gridGap = isDiscussant ? '8px 6px' : '10px 12px';
-                
                 html += `
-                    <div style="text-align: left;">
-                        <div style="font-weight: bold; color: var(--primary-color); font-size: 13px; border-left: 3px solid var(--primary-color); padding-left: 6px; margin-bottom: 8px;">${roleLabels[role]}</div>
-                        <div style="display: flex; flex-wrap: wrap; gap: ${gridGap}; justify-content: flex-start;">
+                    <div style="text-align: left; margin-bottom: 15px;">
+                        <div style="font-weight: bold; color: var(--primary-color); font-size: 13px; border-left: 3px solid var(--primary-color); padding-left: 6px; margin-bottom: 10px;">${roleLabels[role]}</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 12px 0px; justify-content: flex-start; width: 100%;">
                 `;
                 
                 groupPeople.forEach(p => {
                     const avatarHtml = getCircularAvatarWithGradientRingHtml(p, 32);
                     const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
                     
-                    const itemWidth = isDiscussant ? 'calc(33.33% - 4px)' : 'calc(50% - 6px)';
-                    const itemMin = isDiscussant ? '90px' : '150px';
-                    const itemMax = isDiscussant ? '120px' : '175px';
-                    
                     html += `
-                        <div style="display: flex; align-items: center; gap: 6px; width: ${itemWidth}; min-width: ${itemMin}; max-width: ${itemMax}; box-sizing: border-box;">
-                            <div style="flex-shrink: 0;">${avatarHtml}</div>
-                            <div style="display: flex; flex-direction: column; text-align: left; min-width: 0;">
-                                <div style="font-weight: bold; font-size: 11px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
-                                <div style="font-size: 9px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${p.bio || ''}">${hospital || '专家'}</div>
-                            </div>
+                        <div style="display: flex; flex-direction: column; align-items: center; text-align: center; width: 33.33%; box-sizing: border-box; padding: 0 4px; margin-bottom: 6px;">
+                            <div style="margin-bottom: 4px; flex-shrink: 0;">${avatarHtml}</div>
+                            <div style="font-weight: bold; font-size: 10.5px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">${p.name}</div>
+                            <div style="font-size: 8.5px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;" title="${p.bio || ''}">${hospital || '专家'}</div>
                         </div>
                     `;
                 });
@@ -2399,6 +2398,82 @@
         function closeAssignRolesModal() {
             document.getElementById('assign-roles-modal').classList.remove('active');
             pendingAssignments = [];
+        }
+
+        function handleBioFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const statusEl = document.getElementById('bio-file-status');
+            statusEl.innerText = "正在读取: " + file.name + "...";
+            
+            const reader = new FileReader();
+            const extension = file.name.split('.').pop().toLowerCase();
+            
+            if (extension === 'xlsx' || extension === 'xls') {
+                reader.onload = function(evt) {
+                    try {
+                        const data = new Uint8Array(evt.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                        
+                        if (jsonData.length === 0) {
+                            alert("Excel 工作表为空！");
+                            statusEl.innerText = "读取失败: 文件为空";
+                            return;
+                        }
+                        
+                        const headers = jsonData[0].map(h => String(h || '').trim());
+                        let nameIdx = -1;
+                        let bioIdx = -1;
+                        
+                        headers.forEach((h, idx) => {
+                            if (h.includes("姓名") || h.toLowerCase() === "name") {
+                                nameIdx = idx;
+                            }
+                            if (h.includes("简介") || h.includes("简历") || h.includes("介绍") || h.toLowerCase() === "bio" || h.toLowerCase() === "resume") {
+                                bioIdx = idx;
+                            }
+                        });
+                        
+                        if (nameIdx === -1) nameIdx = 0;
+                        if (bioIdx === -1) bioIdx = Math.min(1, headers.length - 1);
+                        
+                        let textBlocks = [];
+                        for (let r = 1; r < jsonData.length; r++) {
+                            const row = jsonData[r];
+                            if (!row || row.length === 0) continue;
+                            const name = String(row[nameIdx] || '').trim();
+                            const bio = String(row[bioIdx] || '').trim();
+                            if (name) {
+                                textBlocks.push(`${name}：${bio}`);
+                            }
+                        }
+                        
+                        document.getElementById('batch-bio-input').value = textBlocks.join('\n\n');
+                        statusEl.innerText = `载入 ${textBlocks.length} 条专家信息`;
+                        statusEl.style.color = '#2e7d32';
+                    } catch (err) {
+                        alert("解析 Excel 失败: " + err.message);
+                        statusEl.innerText = "解析失败";
+                        statusEl.style.color = '#d32f2f';
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                reader.onload = function(evt) {
+                    document.getElementById('batch-bio-input').value = evt.target.result;
+                    statusEl.innerText = "载入文本成功";
+                    statusEl.style.color = '#2e7d32';
+                };
+                reader.onerror = function() {
+                    statusEl.innerText = "读取文本失败";
+                    statusEl.style.color = '#d32f2f';
+                };
+                reader.readAsText(file, 'utf-8');
+            }
         }
 
         function importBioBatch() {
@@ -2920,15 +2995,13 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                     tableH += 0.28 + (lineCount - 1) * 0.14;
                 });
                 
-                // Calculate avatar height dynamically
+                // Calculate avatar height dynamically (Three-column layout: 0.9 inches per row)
                 let avatarHeight = 0;
                 const roles = ['chair', 'host', 'speaker', 'discussant'];
                 roles.forEach(role => {
                     const groupPeople = state.people.filter(p => p.role === role);
                     if (groupPeople.length > 0) {
-                        const isDiscussant = role === 'discussant';
-                        const perRow = isDiscussant ? 3 : 2;
-                        avatarHeight += 0.25 + Math.ceil(groupPeople.length / perRow) * 0.55;
+                        avatarHeight += 0.25 + Math.ceil(groupPeople.length / 3) * 0.9 + 0.08;
                     }
                 });
                 
@@ -3044,21 +3117,21 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                         });
                         currentY += 0.25;
                         
-                        const isDiscussant = role === 'discussant';
-                        const perRow = isDiscussant ? 3 : 2;
-                        const colWidth = isDiscussant ? 1.3 : 1.9;
+                        const perRow = 3;
+                        const colWidth = 1.26;
                         
                         for (let k = 0; k < groupPeople.length; k++) {
                             const p = groupPeople[k];
                             const col = k % perRow;
                             const row = Math.floor(k / perRow);
                             
-                            const x = 0.4 + col * colWidth;
-                            const y = currentY + row * 0.55;
+                            const colCenter = 0.4 + col * colWidth + colWidth / 2;
+                            const x = colCenter - 0.18; // avatar left
+                            const y = currentY + row * 0.9;
                             
                             // Draw sweeping crescent gradient ring (with gradient oval shape fill)
                             slide.addShape(pptx.shapes.OVAL, {
-                                x: x - 0.02, y: y - 0.02, w: 0.40, h: 0.40,
+                                x: colCenter - 0.20, y: y - 0.02, w: 0.40, h: 0.40,
                                 fill: { type: 'gradient', color1: '1e88e5', color2: '00d2ff', angle: 120 },
                                 line: { width: 0 }
                             });
@@ -3083,20 +3156,20 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                             }
                             
                             slide.addText(p.name, {
-                                x: x + 0.42, y: y, w: colWidth - 0.45, h: 0.18,
-                                fontSize: 8, bold: true, color: '333333', fontFace: 'Microsoft YaHei',
-                                valign: 'middle'
-                            });
-                            
-                            const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
-                            slide.addText(hospital || '专家', {
-                                x: x + 0.42, y: y + 0.18, w: colWidth - 0.45, h: 0.15,
-                                fontSize: 7, color: '666666', fontFace: 'Microsoft YaHei',
-                                valign: 'top'
-                            });
+                                x: 0.4 + col * colWidth, y: y + 0.42, w: colWidth, h: 0.16,
+                                fontSize: 7.5, bold: true, color: '333333', fontFace: 'Microsoft YaHei',
+                                align: 'center', valign: 'middle'
+                             });
+                             
+                             const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
+                             slide.addText(hospital || '专家', {
+                                 x: 0.4 + col * colWidth, y: y + 0.58, w: colWidth, h: 0.14,
+                                 fontSize: 6.5, color: '666666', fontFace: 'Microsoft YaHei',
+                                 align: 'center', valign: 'top'
+                             });
                         }
                         
-                        currentY += Math.ceil(groupPeople.length / perRow) * 0.55 + 0.08;
+                        currentY += Math.ceil(groupPeople.length / perRow) * 0.9 + 0.08;
                     }
                     
                     // Separator line
