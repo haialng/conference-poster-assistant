@@ -739,6 +739,33 @@
             }
         }
 
+        function getSquareAvatarHtml(p, size = 140, border = '4px solid white', customStyle = '') {
+            if (p.avatarUrl) {
+                return `<img src="${p.avatarUrl}" style="width:${size}px; height:${size}px; border-radius:8px; object-fit:cover; border:${border}; box-shadow: 0 4px 10px rgba(0,0,0,0.2); display:inline-block; ${customStyle}">`;
+            } else {
+                const initial = p.name ? p.name.charAt(0) : '?';
+                const fontSize = Math.round(size * 0.45);
+                const color = getAvatarColor(p.name);
+                return `<div style="width:${size}px; height:${size}px; border-radius:8px; background:${color}; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:${fontSize}px; border:${border}; box-shadow: 0 4px 10px rgba(0,0,0,0.2); user-select:none; ${customStyle}">${initial}</div>`;
+            }
+        }
+
+        function getCircularAvatarWithGradientRingHtml(p, size = 42) {
+            const ringSize = size + 4;
+            const innerAvatarHtml = getAvatarHtml(p, size, 'none', '');
+            return `
+                <div style="width:${ringSize}px; height:${ringSize}px; border-radius:50%; background: linear-gradient(135deg, #1e88e5, #00d2ff); display:flex; align-items:center; justify-content:center; box-shadow: 0 2px 8px rgba(30,136,229,0.3);">
+                    ${innerAvatarHtml}
+                </div>
+            `;
+        }
+
+        function getPersonNameAndHospital(p) {
+            if (!p) return '';
+            const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
+            return hospital ? `${p.name}（${hospital}）` : p.name;
+        }
+
         function getBioLayoutOptions(bioItems) {
             const count = bioItems.length;
             if (count <= 4) {
@@ -1395,6 +1422,7 @@
             });
             
             renderThumbnailStrip();
+            switchSlide(currentSlide);
         }
 
         function renderThumbnailStrip() {
@@ -1463,11 +1491,11 @@
                         <div class="editable-text" contenteditable="true" id="canvas-subtitle" onblur="syncToForm('subtitle', this.innerText)" style="margin-top:10px; font-size: 14px; letter-spacing: 4px;">${state.meta.subtitle}</div>
                     </div>
                     <div style="margin-top: 30px; padding: 10px 30px 25px 30px; background: rgba(255,255,255,0.85); border-radius: 10px; width: 80%; z-index: 2; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 20px;">
+                        <div id="poster-avatars-section-container" style="display: none; border-bottom: 1px solid rgba(0,0,0,0.08); padding-bottom: 20px; margin-bottom: 5px;">
+                            <div id="poster-avatars-preview" style="display: flex; flex-direction: column; gap: 15px;"></div>
+                        </div>
                         <div>
                             <div id="poster-agenda-preview" style="font-size: 14px; color:#333; text-align: left;"></div>
-                        </div>
-                        <div id="poster-avatars-section-container" style="display: none; border-top: 1px solid rgba(0,0,0,0.08); padding-top: 20px;">
-                            <div id="poster-avatars-preview" style="display: flex; flex-direction: column; gap: 15px;"></div>
                         </div>
                     </div>
                 `;
@@ -1512,12 +1540,13 @@
                         let bioItems = (p.bio ? p.bio.split(/[;\n；\r]+/) : []).map(x => x.trim()).filter(Boolean);
                         const layoutOpts = getBioLayoutOptions(bioItems);
                         let bioListHtml = bioItems.map(item => `<li style="margin-bottom:${layoutOpts.marginBottom}px;">${item}</li>`).join('');
+                        const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
                         content = `
                             <div style="display:flex; width: 85%; align-items: flex-start; gap: 30px; z-index:2;">
                                 <div style="text-align:center; width: 200px; flex-shrink:0;">
-                                    ${getAvatarHtml(p, 140, '4px solid white', 'margin-bottom:12px; margin-left:auto; margin-right:auto;')}
+                                    ${getSquareAvatarHtml(p, 140, '4px solid white', 'margin-bottom:12px; margin-left:auto; margin-right:auto;')}
                                     <h2 style="margin:5px 0; font-size:24px;">${p.name}</h2>
-                                    <div style="font-size:14px; color:#bbdefb; font-weight:bold; margin-top:5px;">${ROLE_NAMES[p.role] || ''}</div>
+                                    <div style="font-size:14px; color:#bbdefb; font-weight:normal; margin-top:5px;">${hospital || '专家'}</div>
                                 </div>
                                 <div style="flex:1; border-left: 2px solid rgba(255,255,255,0.2); padding-left: 25px; text-align:left;">
                                     <h3 style="margin-top:0; font-size: 18px; color:#bbdefb; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:5px; margin-bottom:10px;">专家简介</h3>
@@ -1953,9 +1982,8 @@
                     <thead>
                         <tr style="border-bottom: 2px solid rgba(255,255,255,0.4); color: #bbdefb; font-weight: bold;">
                             <th style="padding: 8px 4px; width: 22%;">时间</th>
-                            <th style="padding: 8px 4px; width: 44%;">内容</th>
-                            <th style="padding: 8px 4px; width: 17%;">讲者</th>
-                            <th style="padding: 8px 4px; width: 17%;">主持</th>
+                            <th style="padding: 8px 4px; width: 53%;">内容</th>
+                            <th style="padding: 8px 4px; width: 25%;">讲者</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1968,33 +1996,40 @@
                 if (a.speakerId) {
                     speakerName = a.speakerId.split(',').map(id => {
                         const p = state.people.find(x => x.id === id);
-                        return p ? p.name : '';
-                    }).filter(Boolean).join('、');
+                        return p ? getPersonNameAndHospital(p) : '';
+                    }).filter(Boolean).join('<br>');
                 }
                 if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
                     const names = a.discussantIds.map(id => {
                         const p = state.people.find(x => x.id === id);
-                        return p ? p.name : '';
+                        return p ? getPersonNameAndHospital(p) : '';
                     }).filter(Boolean);
-                    speakerName = names.join('、');
+                    speakerName = names.join('<br>');
                 }
                 
                 let hostName = '';
                 if (a.hostId) {
                     hostName = a.hostId.split(',').map(id => {
                         const p = state.people.find(x => x.id === id);
-                        return p ? p.name : '';
-                    }).filter(Boolean).join('、');
+                        return p ? getPersonNameAndHospital(p) : '';
+                    }).filter(Boolean).join('<br>');
                 }
                 
                 const hostSpan = rowspans[index].host;
+                
+                if (hostSpan > 0 && a.hostId) {
+                    html += `
+                        <tr style="background-color: rgba(255,255,255,0.15); border-bottom: 1px solid rgba(255,255,255,0.2);">
+                            <td colspan="3" contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'host', this.innerText)" style="padding: 8px 12px; font-weight: bold; color: #bbdefb; font-size: 13px;">主持：${hostName || '--'}</td>
+                        </tr>
+                    `;
+                }
                 
                 html += `
                     <tr draggable="true" data-index="${index}" ondragstart="handleCanvasDragStart.call(this, event)" ondragover="handleCanvasDragOver.call(this, event)" ondrop="handleCanvasDrop.call(this, event)" ondragend="handleCanvasDragEnd.call(this, event)" style="border-bottom: 1px solid rgba(255,255,255,0.2); cursor: grab;">
                         <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'time', this.innerText)" style="padding: 8px 4px; font-weight: bold; color: #bbdefb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.startTimeStr}-${a.endTimeStr}</td>
                         <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'title', this.innerText)" style="padding: 8px 4px; font-weight: bold; overflow: hidden; text-overflow: ellipsis;">${a.title}</td>
                         <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'speaker', this.innerText)" style="padding: 8px 4px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis;">${speakerName || '--'}</td>
-                        ${hostSpan > 0 ? `<td rowspan="${hostSpan}" contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'host', this.innerText)" style="padding: 8px 4px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; border-left: 1px solid rgba(255,255,255,0.15);">${hostName || '--'}</td>` : ''}
                     </tr>
                 `;
             });
@@ -2582,14 +2617,40 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
             }
 
             try {
-                let tableH = (state.agenda.length + 1) * 0.26;
+                // Calculate table height dynamically
+                let tableH = 0.28;
+                const rowspans = calculateAgendaRowspans();
                 
+                let hostHeaderCount = 0;
+                state.agenda.forEach((a, index) => {
+                    const hostSpan = rowspans[index].host;
+                    if (hostSpan > 0 && a.hostId) {
+                        hostHeaderCount++;
+                        tableH += 0.28;
+                    }
+                    
+                    let lineCount = 1;
+                    if (a.speakerId) {
+                        const count = a.speakerId.split(',').length;
+                        if (count > lineCount) lineCount = count;
+                    }
+                    if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
+                        const count = a.discussantIds.length;
+                        if (count > lineCount) lineCount = count;
+                    }
+                    
+                    tableH += 0.28 + (lineCount - 1) * 0.14;
+                });
+                
+                // Calculate avatar height dynamically
                 let avatarHeight = 0;
                 const roles = ['chair', 'host', 'speaker', 'discussant'];
                 roles.forEach(role => {
                     const groupPeople = state.people.filter(p => p.role === role);
                     if (groupPeople.length > 0) {
-                        avatarHeight += 0.25 + Math.ceil(groupPeople.length / 3) * 0.55;
+                        const isDiscussant = role === 'discussant';
+                        const perRow = isDiscussant ? 3 : 2;
+                        avatarHeight += 0.25 + Math.ceil(groupPeople.length / perRow) * 0.55;
                     }
                 });
                 
@@ -2626,81 +2687,10 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                     line: { color: 'cccccc', width: 1 }
                 });
                 
-                slide.addText('会议日程', {
-                    x: 0.3, y: 3.0, w: 3.98, h: 0.4,
-                    align: 'center', fontSize: 12, bold: true, color: '0a3a6e'
-                });
-                
-                let rows = [];
+                let currentY = 2.9;
                 const primaryColorHex = (THEMES[state.template || 'blue'] || THEMES['blue']).primary.replace('#', '');
                 
-                rows.push([
-                    { text: '时间', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei' } },
-                    { text: '内容', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei' } },
-                    { text: '讲者', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei' } },
-                    { text: '主持', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei' } }
-                ]);
-                
-                const rowspans = calculateAgendaRowspans();
-                
-                state.agenda.forEach((a, index) => {
-                    let speakerName = '';
-                    if (a.speakerId) {
-                        speakerName = a.speakerId.split(',').map(id => {
-                            const p = state.people.find(x => x.id === id);
-                            return p ? p.name : '';
-                        }).filter(Boolean).join('、');
-                    }
-                    if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
-                        const names = a.discussantIds.map(id => {
-                            const p = state.people.find(x => x.id === id);
-                            return p ? p.name : '';
-                        }).filter(Boolean);
-                        speakerName = names.join('、');
-                    }
-                    
-                    let hostName = '';
-                    if (a.hostId) {
-                        hostName = a.hostId.split(',').map(id => {
-                            const p = state.people.find(x => x.id === id);
-                            return p ? p.name : '';
-                        }).filter(Boolean).join('、');
-                    }
-                    
-                    const hostSpan = rowspans[index].host;
-                    
-                    let row = [
-                        { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: primaryColorHex, fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
-                        { text: a.title, options: { bold: true, color: '333333', fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
-                        { text: speakerName || '--', options: { color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei' } }
-                    ];
-                    
-                    if (hostSpan > 0) {
-                        row.push({ 
-                            text: hostName || '--', 
-                            options: { rowspan: hostSpan, color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei', valign: 'middle' } 
-                        });
-                    }
-                    
-                    rows.push(row);
-                });
-                
-                slide.addTable(rows, {
-                    x: 0.39, y: 3.4, w: 3.8,
-                    colW: [0.85, 1.65, 0.65, 0.65],
-                    fontSize: 7.5,
-                    border: { type: 'solid', color: 'dddddd', size: 1 },
-                    valign: 'middle'
-                });
-
-                let currentY = 3.4 + tableH + 0.25;
-                
                 if (avatarHeight > 0) {
-                    slide.addShape(pptx.shapes.LINE, {
-                        x: 0.4, y: currentY - 0.1, w: 3.78, h: 0.0,
-                        line: { color: 'dddddd', width: 1 }
-                    });
-                    
                     const roleLabels = {
                         chair: '大会主席',
                         host: '特邀主持',
@@ -2718,13 +2708,24 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                         });
                         currentY += 0.25;
                         
+                        const isDiscussant = role === 'discussant';
+                        const perRow = isDiscussant ? 3 : 2;
+                        const colWidth = isDiscussant ? 1.3 : 1.9;
+                        
                         for (let k = 0; k < groupPeople.length; k++) {
                             const p = groupPeople[k];
-                            const col = k % 3;
-                            const row = Math.floor(k / 3);
+                            const col = k % perRow;
+                            const row = Math.floor(k / perRow);
                             
-                            const x = 0.4 + col * 1.3;
+                            const x = 0.4 + col * colWidth;
                             const y = currentY + row * 0.55;
+                            
+                            // Draw blue ring
+                            slide.addShape(pptx.shapes.OVAL, {
+                                x: x - 0.02, y: y - 0.02, w: 0.40, h: 0.40,
+                                fill: { color: '1e88e5' },
+                                line: { width: 0 }
+                            });
                             
                             if (p.avatarUrl) {
                                 slide.addImage({
@@ -2746,22 +2747,102 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                             }
                             
                             slide.addText(p.name, {
-                                x: x + 0.4, y: y, w: 0.85, h: 0.18,
+                                x: x + 0.42, y: y, w: colWidth - 0.45, h: 0.18,
                                 fontSize: 8, bold: true, color: '333333', fontFace: 'Microsoft YaHei',
                                 valign: 'middle'
                             });
                             
                             const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
                             slide.addText(hospital || '专家', {
-                                x: x + 0.4, y: y + 0.18, w: 0.85, h: 0.15,
+                                x: x + 0.42, y: y + 0.18, w: colWidth - 0.45, h: 0.15,
                                 fontSize: 7, color: '666666', fontFace: 'Microsoft YaHei',
                                 valign: 'top'
                             });
                         }
                         
-                        currentY += Math.ceil(groupPeople.length / 3) * 0.55 + 0.1;
+                        currentY += Math.ceil(groupPeople.length / perRow) * 0.55 + 0.08;
                     }
+                    
+                    // Separator line
+                    slide.addShape(pptx.shapes.LINE, {
+                        x: 0.4, y: currentY, w: 3.78, h: 0.0,
+                        line: { color: 'dddddd', width: 1 }
+                    });
+                    currentY += 0.15;
                 }
+                
+                slide.addText('会议日程', {
+                    x: 0.3, y: currentY, w: 3.98, h: 0.3,
+                    align: 'center', fontSize: 12, bold: true, color: '0a3a6e'
+                });
+                currentY += 0.35;
+                
+                let rows = [];
+                rows.push([
+                    { text: '时间', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei', fill: 'f1f8ff' } },
+                    { text: '内容', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei', fill: 'f1f8ff' } },
+                    { text: '讲者', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei', fill: 'f1f8ff' } }
+                ]);
+                
+                state.agenda.forEach((a, index) => {
+                    let speakerName = '';
+                    if (a.speakerId) {
+                        speakerName = a.speakerId.split(',').map(id => {
+                            const p = state.people.find(x => x.id === id);
+                            return p ? getPersonNameAndHospital(p) : '';
+                        }).filter(Boolean).join('\n');
+                    }
+                    if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
+                        const names = a.discussantIds.map(id => {
+                            const p = state.people.find(x => x.id === id);
+                            return p ? getPersonNameAndHospital(p) : '';
+                        }).filter(Boolean);
+                        speakerName = names.join('\n');
+                    }
+                    
+                    let hostName = '';
+                    if (a.hostId) {
+                        hostName = a.hostId.split(',').map(id => {
+                            const p = state.people.find(x => x.id === id);
+                            return p ? getPersonNameAndHospital(p) : '';
+                        }).filter(Boolean).join('\n');
+                    }
+                    
+                    const hostSpan = rowspans[index].host;
+                    
+                    if (hostSpan > 0 && a.hostId) {
+                        rows.push([
+                            { 
+                                text: '主持：' + hostName, 
+                                options: { 
+                                    colspan: 3, 
+                                    bold: true, 
+                                    color: primaryColorHex, 
+                                    fontSize: 8, 
+                                    fontFace: 'Microsoft YaHei',
+                                    fill: 'f1f8ff',
+                                    align: 'left'
+                                } 
+                            }
+                        ]);
+                    }
+                    
+                    let row = [
+                        { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: primaryColorHex, fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
+                        { text: a.title, options: { bold: true, color: '333333', fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
+                        { text: speakerName || '--', options: { color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei' } }
+                    ];
+                    
+                    rows.push(row);
+                });
+                
+                slide.addTable(rows, {
+                    x: 0.39, y: currentY, w: 3.8,
+                    colW: [0.9, 1.9, 1.0],
+                    fontSize: 7.5,
+                    border: { type: 'solid', color: 'dddddd', size: 1 },
+                    valign: 'middle'
+                });
 
                 await pptx.writeFile({ fileName: state.meta.title + '_会议海报.pptx' });
             } catch(e) {
@@ -2831,8 +2912,7 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                         rows.push([
                             { text: '时间', options: { bold: true, color: 'bbdefb', fontSize: 13 } },
                             { text: '内容', options: { bold: true, color: 'bbdefb', fontSize: 13 } },
-                            { text: '讲者', options: { bold: true, color: 'bbdefb', fontSize: 13 } },
-                            { text: '主持', options: { bold: true, color: 'bbdefb', fontSize: 13 } }
+                            { text: '讲者', options: { bold: true, color: 'bbdefb', fontSize: 13 } }
                         ]);
                         
                         const rowspans = calculateAgendaRowspans();
@@ -2842,26 +2922,42 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                             if (a.speakerId) {
                                 speakerName = a.speakerId.split(',').map(id => {
                                     const p = state.people.find(x => x.id === id);
-                                    return p ? p.name : '';
-                                }).filter(Boolean).join('、');
+                                    return p ? getPersonNameAndHospital(p) : '';
+                                }).filter(Boolean).join('\n');
                             }
                             if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
                                 const names = a.discussantIds.map(id => {
                                     const p = state.people.find(x => x.id === id);
-                                    return p ? p.name : '';
+                                    return p ? getPersonNameAndHospital(p) : '';
                                 }).filter(Boolean);
-                                speakerName = names.join('、');
+                                speakerName = names.join('\n');
                             }
                             
                             let hostName = '';
                             if (a.hostId) {
                                 hostName = a.hostId.split(',').map(id => {
                                     const p = state.people.find(x => x.id === id);
-                                    return p ? p.name : '';
-                                }).filter(Boolean).join('、');
+                                    return p ? getPersonNameAndHospital(p) : '';
+                                }).filter(Boolean).join('\n');
                             }
                             
                             const hostSpan = rowspans[index].host;
+                            
+                            if (hostSpan > 0 && a.hostId) {
+                                rows.push([
+                                    { 
+                                        text: '主持：' + hostName, 
+                                        options: { 
+                                            colspan: 3, 
+                                            bold: true, 
+                                            color: 'bbdefb', 
+                                            fontSize: 12, 
+                                            valign: 'middle',
+                                            align: 'left'
+                                        } 
+                                    }
+                                ]);
+                            }
                             
                             let row = [
                                 { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: 'ffffff', fontSize: 11 } },
@@ -2869,19 +2965,12 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                                 { text: speakerName || '--', options: { color: 'ffffff', fontSize: 11 } }
                             ];
                             
-                            if (hostSpan > 0) {
-                                row.push({ 
-                                    text: hostName || '--', 
-                                    options: { rowspan: hostSpan, color: 'ffffff', fontSize: 11, valign: 'middle' } 
-                                });
-                            }
-                            
                             rows.push(row);
                         });
                         
                         slide.addTable(rows, {
                             x: 1.0, y: 1.3, w: 8.0,
-                            colW: [1.8, 3.4, 1.4, 1.4],
+                            colW: [1.8, 4.4, 1.8],
                             fontSize: 11,
                             border: { type: 'solid', color: 'ffffff', size: 1 }
                         });
@@ -2920,9 +3009,10 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                                 });
                             } else {
                                 const color = getAvatarColor(p.name).replace('#', '');
-                                slide.addShape(pptx.shapes.OVAL, {
+                                slide.addShape(pptx.shapes.RECTANGLE, {
                                     x: 1.0, y: 0.8, w: 1.8, h: 1.8,
                                     fill: { color: color },
+                                    rectRadius: 0.05,
                                     line: { color: 'ffffff', width: 2 }
                                 });
                                 slide.addText(p.name ? p.name.charAt(0) : '?', {
@@ -2936,9 +3026,11 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                                 x: 0.8, y: 2.8, w: 2.2, h: 0.5,
                                 align: 'center', fontSize: 22, bold: true, color: 'ffffff'
                             });
-                            slide.addText(ROLE_NAMES[p.role] || '', {
+                            
+                            const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
+                            slide.addText(hospital || '专家', {
                                 x: 0.8, y: 3.4, w: 2.2, h: 0.4,
-                                align: 'center', fontSize: 12, color: 'bbdefb', bold: true
+                                align: 'center', fontSize: 12, color: 'bbdefb', bold: false
                             });
 
                             slide.addShape(pptx.shapes.RECTANGLE, {
