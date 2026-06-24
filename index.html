@@ -317,11 +317,13 @@
 
         .slide-canvas.poster-mode {
             width: 440px;
-            height: 960px;
+            height: auto;
+            min-height: 960px;
             background: linear-gradient(180deg, #cde8f8, #e8f5ff, #f2f8ff, #daeeff);
             color: var(--primary-color);
             justify-content: flex-start;
             padding-top: 50px;
+            padding-bottom: 50px;
         }
 
         /* Editable Text */
@@ -439,6 +441,7 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
                     <h3 style="margin:0;">人员管理</h3>
                     <div style="display:flex; gap:5px;">
+                        <button onclick="openBatchBioModal()" style="padding:4px 8px; background:var(--mid-blue); color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.8rem;">+ 批量导入简介</button>
                         <button onclick="openBatchPeopleModal()" style="padding:4px 8px; background:var(--mid-blue); color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.8rem;">+ 批量导入</button>
                         <button onclick="openPersonModal()" style="padding:4px 8px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.8rem;">+ 添加单个</button>
                     </div>
@@ -591,6 +594,42 @@
                 </select>
             </div>
             <button onclick="importPeopleBatch()" style="width:100%; padding:10px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">确认导入</button>
+        </div>
+    </div>
+
+    <!-- Batch Import Bios Modal -->
+    <div class="modal" id="batch-bio-modal">
+        <div class="modal-content" style="width: 550px;">
+            <div class="modal-header">
+                <h3>批量导入专家简介</h3>
+                <button onclick="closeBatchBioModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">×</button>
+            </div>
+            <p style="font-size:0.8rem; color:#666; margin-bottom:10px;">输入专家姓名与简介。支持以下几种格式：<br>
+            1. <strong>姓名：简介内容</strong>（如：张三：北京协和医院...）<br>
+            2. <strong>姓名 简介内容</strong>（第一行姓名，后面为简介，专家之间用空行隔开）</p>
+            <div class="form-group">
+                <textarea id="batch-bio-input" class="form-control" rows="12" placeholder="例如：
+张三：北京协和医院主任医师，教授，长期从事心血管内科工作。
+
+李四
+复旦大学附属华山医院副主任医师。擅长脑血管病治疗。"></textarea>
+            </div>
+            <button onclick="importBioBatch()" style="width:100%; padding:10px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">确认导入</button>
+        </div>
+    </div>
+
+    <!-- Assign Roles Modal -->
+    <div class="modal" id="assign-roles-modal">
+        <div class="modal-content" style="width: 500px; max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>分配人员角色</h3>
+                <button onclick="closeAssignRolesModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;">×</button>
+            </div>
+            <p style="font-size:0.85rem; color:#666; margin-bottom:15px;">以下专家在会议日程中未被指派任何任务，请为他们选择在会议中的主要角色身份：</p>
+            <div id="assign-roles-list" style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px;">
+                <!-- Dynamic role selectors for each unassigned guest -->
+            </div>
+            <button onclick="confirmRoleAssignments()" style="width:100%; padding:10px; background:var(--primary-color); color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">确定并导入</button>
         </div>
     </div>
 
@@ -1293,43 +1332,49 @@
             
             // 4. Generate slides based on agenda items
             state.agenda.forEach(item => {
+                let speakers = [];
+                if (item.speakerId) {
+                    speakers = item.speakerId.split(',').map(id => state.people.find(p => p.id === id)).filter(Boolean);
+                }
+                let hosts = [];
+                if (item.hostId) {
+                    hosts = item.hostId.split(',').map(id => state.people.find(p => p.id === id)).filter(Boolean);
+                }
+
                 if (item.type === 'opening' || item.type === 'closing') {
-                    let speaker = state.people.find(p => p.id === item.speakerId);
-                    let host = state.people.find(p => p.id === item.hostId);
-                    
                     slideList.push({
                         type: 'transition',
                         title: item.title,
-                        subtitle: (speaker ? `${speaker.name} ${ROLE_NAMES[speaker.role] || ''}` : '') + (host ? ` / 主持: ${host.name}` : ''),
+                        subtitle: (speakers.length > 0 ? speakers.map(s => `${s.name} ${ROLE_NAMES[s.role] || ''}`).join('、') : '') + 
+                                  (hosts.length > 0 ? ` / 主持: ${hosts.map(h => h.name).join('、')}` : ''),
                         theme: state.template || 'blue'
                     });
                     
-                    if (speaker) slideList.push({ type: 'bio', personId: speaker.id });
-                    if (host) slideList.push({ type: 'bio', personId: host.id });
+                    speakers.forEach(s => slideList.push({ type: 'bio', personId: s.id }));
+                    hosts.forEach(h => slideList.push({ type: 'bio', personId: h.id }));
                     
                 } else if (item.type === 'talk' || item.type === 'case' || item.type === 'custom') {
-                    let speaker = state.people.find(p => p.id === item.speakerId);
-                    let host = state.people.find(p => p.id === item.hostId);
+                    const speakerNames = speakers.length > 0 ? speakers.map(s => `${s.name} ${ROLE_NAMES[s.role] || ''} (${s.bio ? s.bio.split(/[，,]/)[0] : ''})`).join('、') : '暂无讲者';
+                    const hostText = hosts.length > 0 ? `主持: ${hosts.map(h => `${h.name} (${h.bio ? h.bio.split(/[，,]/)[0] : ''})`).join('、')}` : '';
                     
                     slideList.push({
                         type: 'transition',
                         title: item.title,
-                        subtitle: speaker ? `${speaker.name} ${ROLE_NAMES[speaker.role] || ''} (${speaker.bio ? speaker.bio.split(/[，,]/)[0] : ''})` : '暂无讲者',
-                        hostText: host ? `主持: ${host.name} (${host.bio ? host.bio.split(/[，,]/)[0] : ''})` : '',
+                        subtitle: speakerNames,
+                        hostText: hostText,
                         theme: state.template || 'blue'
                     });
                     
-                    if (speaker) slideList.push({ type: 'bio', personId: speaker.id });
-                    if (host) slideList.push({ type: 'bio', personId: host.id });
+                    speakers.forEach(s => slideList.push({ type: 'bio', personId: s.id }));
+                    hosts.forEach(h => slideList.push({ type: 'bio', personId: h.id }));
                     
                 } else if (item.type === 'discussion') {
-                    let host = state.people.find(p => p.id === item.hostId);
                     let discussantIds = item.discussantIds || [];
                     
                     slideList.push({
                         type: 'transition',
                         title: item.title,
-                        subtitle: host ? `主持: ${host.name}` : '讨论环节',
+                        subtitle: hosts.length > 0 ? `主持: ${hosts.map(h => h.name).join('、')}` : '讨论环节',
                         theme: state.template || 'blue'
                     });
                     
@@ -1417,11 +1462,17 @@
                         <h1 class="editable-text" contenteditable="true" id="canvas-title" onblur="syncToForm('title', this.innerText)" style="margin:0; font-family: var(--font-serif); font-size: 52px; letter-spacing: 6px;">${state.meta.title}</h1>
                         <div class="editable-text" contenteditable="true" id="canvas-subtitle" onblur="syncToForm('subtitle', this.innerText)" style="margin-top:10px; font-size: 14px; letter-spacing: 4px;">${state.meta.subtitle}</div>
                     </div>
-                    <div style="margin-top: 40px; padding: 10px 30px; background: rgba(255,255,255,0.85); border-radius: 10px; width: 80%; z-index: 2; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
-                        <div id="poster-agenda-preview" style="font-size: 14px; margin-top: 15px; color:#333; text-align: left;"></div>
+                    <div style="margin-top: 30px; padding: 10px 30px 25px 30px; background: rgba(255,255,255,0.85); border-radius: 10px; width: 80%; z-index: 2; box-shadow: 0 4px 15px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 20px;">
+                        <div>
+                            <div id="poster-agenda-preview" style="font-size: 14px; color:#333; text-align: left;"></div>
+                        </div>
+                        <div id="poster-avatars-section-container" style="display: none; border-top: 1px solid rgba(0,0,0,0.08); padding-top: 20px;">
+                            <div id="poster-avatars-preview" style="display: flex; flex-direction: column; gap: 15px;"></div>
+                        </div>
                     </div>
                 `;
                 renderPosterAgendaPreview();
+                renderPosterAvatars();
             } else {
                 canvas.classList.remove('poster-mode');
                 if (state.meta.slideBg) {
@@ -1480,7 +1531,10 @@
                         content = `<h2>专家简介</h2><p>未找到专家信息</p>`;
                     }
                 } else if (slide.type === 'discussion_panel') {
-                    let host = state.people.find(p => p.id === slide.hostId);
+                    let hosts = [];
+                    if (slide.hostId) {
+                        hosts = slide.hostId.split(',').map(id => state.people.find(p => p.id === id)).filter(Boolean);
+                    }
                     let discussants = state.people.filter(p => slide.discussantIds.includes(p.id));
                     
                     let discussantsHtml = discussants.map(p => `
@@ -1496,11 +1550,13 @@
                     content = `
                         <h2 style="font-family:var(--font-serif); font-size: 28px; margin-bottom: 15px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 8px; width: 85%;">讨论环节</h2>
                         <div style="display:flex; flex-direction:column; align-items:center; width: 85%; gap: 15px; z-index:2;">
-                            ${host ? `
-                            <div style="background:rgba(255,255,255,0.2); border-radius:6px; padding:8px 15px; display:flex; align-items:center; gap:10px; width: fit-content; border: 1px solid rgba(255,255,255,0.3); text-align:left;">
+                            ${hosts.length > 0 ? `
+                            <div style="background:rgba(255,255,255,0.2); border-radius:6px; padding:8px 15px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; width: fit-content; border: 1px solid rgba(255,255,255,0.3); text-align:left;">
                                 <strong style="color:#bbdefb; font-size:14px;">主持嘉宾：</strong>
-                                <span style="font-weight:bold; font-size:16px; color:white;">${host.name}</span>
-                                <span style="font-size:12px; opacity:0.9; margin-left: 10px; color:white;">${host.bio || ''}</span>
+                                ${hosts.map(h => `
+                                    <span style="font-weight:bold; font-size:16px; color:white;">${h.name}</span>
+                                    <span style="font-size:12px; opacity:0.9; margin-right: 15px; color:white;">${h.bio ? h.bio.split(/[，,]/)[0] : ''}</span>
+                                `).join('')}
                             </div>` : ''}
                             
                             <div style="width: 100%;">
@@ -1594,6 +1650,27 @@
             canvasDragStartIndex = -1;
         }
 
+        function updateConsecutiveHosts(agendaId, originalHostId, newHostId) {
+            const idx = state.agenda.findIndex(a => a.id === agendaId);
+            if (idx === -1) return;
+            
+            state.agenda[idx].hostId = newHostId;
+            
+            // Go forward
+            let j = idx + 1;
+            while (j < state.agenda.length && (state.agenda[j].hostId || '') === originalHostId) {
+                state.agenda[j].hostId = newHostId;
+                j++;
+            }
+            
+            // Go backward
+            let k = idx - 1;
+            while (k >= 0 && (state.agenda[k].hostId || '') === originalHostId) {
+                state.agenda[k].hostId = newHostId;
+                k--;
+            }
+        }
+
         function syncAgendaCellFromCanvas(agendaId, field, newValue) {
             newValue = newValue.trim().replace(/\n/g, ' ');
             const item = state.agenda.find(a => a.id === agendaId);
@@ -1659,51 +1736,93 @@
                     if (!newValue || newValue === '--' || newValue === '无') {
                         item.speakerId = '';
                     } else {
-                        let person = state.people.find(p => p.name === newValue && (p.role === 'speaker' || p.role === 'chair'));
+                        const names = newValue.split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean);
+                        let newIds = [];
+                        names.forEach(name => {
+                            let person = state.people.find(p => p.name === name && (p.role === 'speaker' || p.role === 'chair'));
+                            if (!person) {
+                                const py = window.pinyinPro ? pinyinPro.pinyin(name, { toneType: 'none', type: 'array' }).join('') : name;
+                                const newId = generateId();
+                                person = {
+                                    id: newId,
+                                    role: 'speaker',
+                                    name: name,
+                                    bio: '',
+                                    pinyin: py,
+                                    avatarUrl: null
+                                };
+                                state.people.push(person);
+                                syncToGuestLibrary(person);
+                            }
+                            newIds.push(person.id);
+                        });
+                        item.speakerId = newIds.join(',');
+                        renderPeopleList();
+                    }
+                }
+            } else if (field === 'host') {
+                const originalHostId = item.hostId || '';
+                if (!newValue || newValue === '--' || newValue === '无') {
+                    updateConsecutiveHosts(item.id, originalHostId, '');
+                } else {
+                    const names = newValue.split(/[、,，\s]+/).map(x => x.trim()).filter(Boolean);
+                    let newIds = [];
+                    names.forEach(name => {
+                        let person = state.people.find(p => p.name === name && (p.role === 'host' || p.role === 'chair'));
                         if (!person) {
-                            const py = window.pinyinPro ? pinyinPro.pinyin(newValue, { toneType: 'none', type: 'array' }).join('') : newValue;
+                            const py = window.pinyinPro ? pinyinPro.pinyin(name, { toneType: 'none', type: 'array' }).join('') : name;
                             const newId = generateId();
                             person = {
                                 id: newId,
-                                role: 'speaker',
-                                name: newValue,
+                                role: 'host',
+                                name: name,
                                 bio: '',
                                 pinyin: py,
                                 avatarUrl: null
                             };
                             state.people.push(person);
                             syncToGuestLibrary(person);
-                            renderPeopleList();
                         }
-                        item.speakerId = person.id;
-                    }
-                }
-            } else if (field === 'host') {
-                if (!newValue || newValue === '--' || newValue === '无') {
-                    item.hostId = '';
-                } else {
-                    let person = state.people.find(p => p.name === newValue && (p.role === 'host' || p.role === 'chair'));
-                    if (!person) {
-                        const py = window.pinyinPro ? pinyinPro.pinyin(newValue, { toneType: 'none', type: 'array' }).join('') : newValue;
-                        const newId = generateId();
-                        person = {
-                            id: newId,
-                            role: 'host',
-                            name: newValue,
-                            bio: '',
-                            pinyin: py,
-                            avatarUrl: null
-                        };
-                        state.people.push(person);
-                        syncToGuestLibrary(person);
-                        renderPeopleList();
-                    }
-                    item.hostId = person.id;
+                        newIds.push(person.id);
+                    });
+                    updateConsecutiveHosts(item.id, originalHostId, newIds.join(','));
+                    renderPeopleList();
                 }
             }
             
             saveState();
             rebuildSlides();
+        }
+
+        function calculateAgendaRowspans() {
+            let rowspans = [];
+            for (let i = 0; i < state.agenda.length; i++) {
+                rowspans[i] = { host: 1 };
+            }
+            
+            let i = 0;
+            while (i < state.agenda.length) {
+                const currentHost = state.agenda[i].hostId || '';
+                if (!currentHost) {
+                    rowspans[i].host = 1;
+                    i++;
+                    continue;
+                }
+                
+                let count = 1;
+                let j = i + 1;
+                while (j < state.agenda.length && (state.agenda[j].hostId || '') === currentHost) {
+                    count++;
+                    j++;
+                }
+                
+                rowspans[i].host = count;
+                for (let k = i + 1; k < j; k++) {
+                    rowspans[k].host = 0;
+                }
+                i = j;
+            }
+            return rowspans;
         }
 
         function renderPosterAgendaPreview() {
@@ -1724,11 +1843,16 @@
                     <tbody>
             `;
             
+            const rowspans = calculateAgendaRowspans();
+            
             state.agenda.forEach((a, index) => {
-                const speaker = state.people.find(p => p.id === a.speakerId);
-                const host = state.people.find(p => p.id === a.hostId);
-                
-                let speakerName = speaker ? speaker.name : '';
+                let speakerName = '';
+                if (a.speakerId) {
+                    speakerName = a.speakerId.split(',').map(id => {
+                        const p = state.people.find(x => x.id === id);
+                        return p ? p.name : '';
+                    }).filter(Boolean).join('、');
+                }
                 if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
                     const names = a.discussantIds.map(id => {
                         const p = state.people.find(x => x.id === id);
@@ -1737,14 +1861,22 @@
                     speakerName = names.join('、');
                 }
                 
-                let hostName = host ? host.name : '';
+                let hostName = '';
+                if (a.hostId) {
+                    hostName = a.hostId.split(',').map(id => {
+                        const p = state.people.find(x => x.id === id);
+                        return p ? p.name : '';
+                    }).filter(Boolean).join('、');
+                }
+                
+                const hostSpan = rowspans[index].host;
                 
                 html += `
                     <tr draggable="true" data-index="${index}" ondragstart="handleCanvasDragStart.call(this, event)" ondragover="handleCanvasDragOver.call(this, event)" ondrop="handleCanvasDrop.call(this, event)" ondragend="handleCanvasDragEnd.call(this, event)" style="border-bottom: 1px solid rgba(0,0,0,0.08); cursor: grab;">
                         <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'time', this.innerText)" style="padding: 6px 4px; font-weight: bold; color: var(--primary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.startTimeStr}-${a.endTimeStr}</td>
                         <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'title', this.innerText)" style="padding: 6px 4px; font-weight: bold; overflow: hidden; text-overflow: ellipsis;">${a.title}</td>
                         <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'speaker', this.innerText)" style="padding: 6px 4px; color: #555; overflow: hidden; text-overflow: ellipsis;">${speakerName || '--'}</td>
-                        <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'host', this.innerText)" style="padding: 6px 4px; color: #555; overflow: hidden; text-overflow: ellipsis;">${hostName || '--'}</td>
+                        ${hostSpan > 0 ? `<td rowspan="${hostSpan}" contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'host', this.innerText)" style="padding: 6px 4px; color: #555; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; border-left: 1px solid rgba(0,0,0,0.05);">${hostName || '--'}</td>` : ''}
                     </tr>
                 `;
             });
@@ -1754,6 +1886,62 @@
                 </table>
             `;
             el.innerHTML = html;
+        }
+
+        function renderPosterAvatars() {
+            const container = document.getElementById('poster-avatars-section-container');
+            const previewEl = document.getElementById('poster-avatars-preview');
+            if (!container || !previewEl) return;
+            
+            const roles = ['chair', 'host', 'speaker', 'discussant'];
+            const roleLabels = {
+                chair: '大会主席',
+                host: '特邀主持',
+                speaker: '演讲嘉宾',
+                discussant: '讨论嘉宾'
+            };
+            
+            let html = '';
+            let totalCount = 0;
+            
+            roles.forEach(role => {
+                const groupPeople = state.people.filter(p => p.role === role);
+                if (groupPeople.length === 0) return;
+                
+                totalCount += groupPeople.length;
+                
+                html += `
+                    <div style="text-align: left;">
+                        <div style="font-weight: bold; color: var(--primary-color); font-size: 13px; border-left: 3px solid var(--primary-color); padding-left: 6px; margin-bottom: 8px;">${roleLabels[role]}</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 15px 20px;">
+                `;
+                
+                groupPeople.forEach(p => {
+                    const avatarHtml = getAvatarHtml(p, 42, '2px solid white', '');
+                    const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
+                    html += `
+                        <div style="display: flex; align-items: center; gap: 8px; min-width: 110px; max-width: 170px;">
+                            <div style="flex-shrink: 0;">${avatarHtml}</div>
+                            <div style="display: flex; flex-direction: column; text-align: left; min-width: 0;">
+                                <div style="font-weight: bold; font-size: 12px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.name}</div>
+                                <div style="font-size: 10px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${p.bio || ''}">${hospital || '专家'}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+            
+            if (totalCount > 0) {
+                container.style.display = 'block';
+                previewEl.innerHTML = html;
+            } else {
+                container.style.display = 'none';
+            }
         }
 
         function renderSlideAgendaPreview() {
@@ -1773,11 +1961,16 @@
                     <tbody>
             `;
             
+            const rowspans = calculateAgendaRowspans();
+            
             state.agenda.forEach((a, index) => {
-                const speaker = state.people.find(p => p.id === a.speakerId);
-                const host = state.people.find(p => p.id === a.hostId);
-                
-                let speakerName = speaker ? speaker.name : '';
+                let speakerName = '';
+                if (a.speakerId) {
+                    speakerName = a.speakerId.split(',').map(id => {
+                        const p = state.people.find(x => x.id === id);
+                        return p ? p.name : '';
+                    }).filter(Boolean).join('、');
+                }
                 if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
                     const names = a.discussantIds.map(id => {
                         const p = state.people.find(x => x.id === id);
@@ -1786,14 +1979,22 @@
                     speakerName = names.join('、');
                 }
                 
-                let hostName = host ? host.name : '';
+                let hostName = '';
+                if (a.hostId) {
+                    hostName = a.hostId.split(',').map(id => {
+                        const p = state.people.find(x => x.id === id);
+                        return p ? p.name : '';
+                    }).filter(Boolean).join('、');
+                }
+                
+                const hostSpan = rowspans[index].host;
                 
                 html += `
                     <tr draggable="true" data-index="${index}" ondragstart="handleCanvasDragStart.call(this, event)" ondragover="handleCanvasDragOver.call(this, event)" ondrop="handleCanvasDrop.call(this, event)" ondragend="handleCanvasDragEnd.call(this, event)" style="border-bottom: 1px solid rgba(255,255,255,0.2); cursor: grab;">
                         <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'time', this.innerText)" style="padding: 8px 4px; font-weight: bold; color: #bbdefb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${a.startTimeStr}-${a.endTimeStr}</td>
                         <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'title', this.innerText)" style="padding: 8px 4px; font-weight: bold; overflow: hidden; text-overflow: ellipsis;">${a.title}</td>
                         <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'speaker', this.innerText)" style="padding: 8px 4px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis;">${speakerName || '--'}</td>
-                        <td contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'host', this.innerText)" style="padding: 8px 4px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis;">${hostName || '--'}</td>
+                        ${hostSpan > 0 ? `<td rowspan="${hostSpan}" contenteditable="true" onblur="syncAgendaCellFromCanvas('${a.id}', 'host', this.innerText)" style="padding: 8px 4px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; border-left: 1px solid rgba(255,255,255,0.15);">${hostName || '--'}</td>` : ''}
                     </tr>
                 `;
             });
@@ -1868,6 +2069,145 @@
                 alert("导入失败，请检查输入名单");
             }
             closeBatchPeopleModal();
+        }
+
+        // --- Batch Import Bios ---
+        let pendingAssignments = [];
+
+        function openBatchBioModal() {
+            document.getElementById('batch-bio-modal').classList.add('active');
+            document.getElementById('batch-bio-input').value = '';
+        }
+
+        function closeBatchBioModal() {
+            document.getElementById('batch-bio-modal').classList.remove('active');
+        }
+
+        function openAssignRolesModal(unassignedList) {
+            pendingAssignments = unassignedList;
+            const container = document.getElementById('assign-roles-list');
+            container.innerHTML = '';
+            
+            unassignedList.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:8px;';
+                row.innerHTML = `
+                    <div style="font-weight:bold; font-size:0.95rem; color:#333;">${item.name}</div>
+                    <select id="assign-role-${index}" class="form-control" style="width:180px; padding:4px 8px; border-radius:4px; font-size:0.85rem;">
+                        <option value="discussant">讨论嘉宾</option>
+                        <option value="speaker">讲者</option>
+                        <option value="host">主持</option>
+                        <option value="chair">大会主席</option>
+                    </select>
+                `;
+                container.appendChild(row);
+            });
+            
+            document.getElementById('assign-roles-modal').classList.add('active');
+        }
+
+        function closeAssignRolesModal() {
+            document.getElementById('assign-roles-modal').classList.remove('active');
+            pendingAssignments = [];
+        }
+
+        function importBioBatch() {
+            const rawText = document.getElementById('batch-bio-input').value.trim();
+            if (!rawText) {
+                alert("请输入需要导入的专家简介内容！");
+                return;
+            }
+            
+            const cleanText = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            const blocks = cleanText.split(/\n\s*\n+/);
+            
+            let updatedCount = 0;
+            let unassignedList = [];
+            
+            blocks.forEach(block => {
+                const trimmed = block.trim();
+                if (!trimmed) return;
+                
+                const lines = trimmed.split('\n').map(l => l.trim()).filter(Boolean);
+                if (lines.length === 0) return;
+                
+                let name = '';
+                let bio = '';
+                
+                const firstLine = lines[0];
+                const colonIdx = firstLine.search(/[：:]/);
+                if (colonIdx !== -1) {
+                    name = firstLine.substring(0, colonIdx).trim();
+                    const firstLineBio = firstLine.substring(colonIdx + 1).trim();
+                    bio = [firstLineBio, ...lines.slice(1)].join('\n').trim();
+                } else if (lines.length > 1 && firstLine.length <= 4) {
+                    name = firstLine;
+                    bio = lines.slice(1).join('\n').trim();
+                } else {
+                    const words = firstLine.split(/\s+/);
+                    name = words[0];
+                    bio = [words.slice(1).join(' '), ...lines.slice(1)].join('\n').trim();
+                }
+                
+                if (!name) return;
+                
+                const existing = state.people.find(p => p.name === name);
+                if (existing) {
+                    existing.bio = bio;
+                    syncToGuestLibrary(existing);
+                    updatedCount++;
+                } else {
+                    unassignedList.push({ name, bio });
+                }
+            });
+            
+            closeBatchBioModal();
+            
+            if (unassignedList.length > 0) {
+                openAssignRolesModal(unassignedList);
+            } else {
+                if (updatedCount > 0) {
+                    saveState();
+                    renderPeopleList();
+                    rebuildSlides();
+                    alert(`成功更新了 ${updatedCount} 位专家的简介！`);
+                } else {
+                    alert("未识别到有效的专家信息，请检查输入格式。");
+                }
+            }
+        }
+
+        function confirmRoleAssignments() {
+            let newlyAdded = 0;
+            pendingAssignments.forEach((item, index) => {
+                const roleSelect = document.getElementById(`assign-role-${index}`);
+                if (!roleSelect) return;
+                const role = roleSelect.value;
+                
+                const py = window.pinyinPro ? pinyinPro.pinyin(item.name, { toneType: 'none', type: 'array' }).join('') : item.name;
+                const libMatch = guestLibrary.find(x => x.name === item.name);
+                const avatarUrl = libMatch ? libMatch.avatarUrl : null;
+                
+                const pObj = {
+                    id: generateId(),
+                    role: role,
+                    name: item.name,
+                    bio: item.bio,
+                    pinyin: py,
+                    avatarUrl: avatarUrl
+                };
+                
+                state.people.push(pObj);
+                syncToGuestLibrary(pObj);
+                newlyAdded++;
+            });
+            
+            saveState();
+            renderPeopleList();
+            rebuildSlides();
+            
+            closeAssignRolesModal();
+            alert(`成功导入了 ${newlyAdded} 位新专家！`);
         }
 
         // --- Custom Background Image Upload ---
@@ -2242,9 +2582,22 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
             }
 
             try {
+                let tableH = (state.agenda.length + 1) * 0.26;
+                
+                let avatarHeight = 0;
+                const roles = ['chair', 'host', 'speaker', 'discussant'];
+                roles.forEach(role => {
+                    const groupPeople = state.people.filter(p => p.role === role);
+                    if (groupPeople.length > 0) {
+                        avatarHeight += 0.25 + Math.ceil(groupPeople.length / 3) * 0.55;
+                    }
+                });
+                
+                let dynamicHeight = Math.max(10.0, 3.4 + tableH + avatarHeight + 0.6);
+                
                 let pptx = new PptxGenJS();
-                pptx.defineLayout({ name: 'POSTER', width: 4.58, height: 10.0 });
-                pptx.layout = 'POSTER';
+                pptx.defineLayout({ name: 'DYNAMIC_POSTER', width: 4.58, height: dynamicHeight });
+                pptx.layout = 'DYNAMIC_POSTER';
                 
                 let slide = pptx.addSlide();
                 
@@ -2265,8 +2618,9 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                     align: 'center', fontSize: 11, fontFace: 'Microsoft YaHei', color: '1565c0'
                 });
 
+                const rectH = dynamicHeight - 3.2;
                 slide.addShape(pptx.shapes.RECTANGLE, {
-                    x: 0.3, y: 2.8, w: 3.98, h: 6.8,
+                    x: 0.3, y: 2.8, w: 3.98, h: rectH,
                     fill: { color: 'ffffff', transparency: 10 },
                     rectRadius: 0.1,
                     line: { color: 'cccccc', width: 1 }
@@ -2287,11 +2641,16 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                     { text: '主持', options: { bold: true, color: primaryColorHex, fontSize: 8, fontFace: 'Microsoft YaHei' } }
                 ]);
                 
-                state.agenda.forEach(a => {
-                    const speaker = state.people.find(p => p.id === a.speakerId);
-                    const host = state.people.find(p => p.id === a.hostId);
-                    
-                    let speakerName = speaker ? speaker.name : '';
+                const rowspans = calculateAgendaRowspans();
+                
+                state.agenda.forEach((a, index) => {
+                    let speakerName = '';
+                    if (a.speakerId) {
+                        speakerName = a.speakerId.split(',').map(id => {
+                            const p = state.people.find(x => x.id === id);
+                            return p ? p.name : '';
+                        }).filter(Boolean).join('、');
+                    }
                     if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
                         const names = a.discussantIds.map(id => {
                             const p = state.people.find(x => x.id === id);
@@ -2300,14 +2659,30 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                         speakerName = names.join('、');
                     }
                     
-                    let hostName = host ? host.name : '';
+                    let hostName = '';
+                    if (a.hostId) {
+                        hostName = a.hostId.split(',').map(id => {
+                            const p = state.people.find(x => x.id === id);
+                            return p ? p.name : '';
+                        }).filter(Boolean).join('、');
+                    }
                     
-                    rows.push([
+                    const hostSpan = rowspans[index].host;
+                    
+                    let row = [
                         { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: primaryColorHex, fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
                         { text: a.title, options: { bold: true, color: '333333', fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
-                        { text: speakerName || '--', options: { color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei' } },
-                        { text: hostName || '--', options: { color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei' } }
-                    ]);
+                        { text: speakerName || '--', options: { color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei' } }
+                    ];
+                    
+                    if (hostSpan > 0) {
+                        row.push({ 
+                            text: hostName || '--', 
+                            options: { rowspan: hostSpan, color: '555555', fontSize: 7.5, fontFace: 'Microsoft YaHei', valign: 'middle' } 
+                        });
+                    }
+                    
+                    rows.push(row);
                 });
                 
                 slide.addTable(rows, {
@@ -2317,6 +2692,76 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                     border: { type: 'solid', color: 'dddddd', size: 1 },
                     valign: 'middle'
                 });
+
+                let currentY = 3.4 + tableH + 0.25;
+                
+                if (avatarHeight > 0) {
+                    slide.addShape(pptx.shapes.LINE, {
+                        x: 0.4, y: currentY - 0.1, w: 3.78, h: 0.0,
+                        line: { color: 'dddddd', width: 1 }
+                    });
+                    
+                    const roleLabels = {
+                        chair: '大会主席',
+                        host: '特邀主持',
+                        speaker: '演讲嘉宾',
+                        discussant: '讨论嘉宾'
+                    };
+                    
+                    for (const role of roles) {
+                        const groupPeople = state.people.filter(p => p.role === role);
+                        if (groupPeople.length === 0) continue;
+                        
+                        slide.addText(roleLabels[role], {
+                            x: 0.4, y: currentY, w: 3.78, h: 0.2,
+                            fontSize: 9, bold: true, color: primaryColorHex, fontFace: 'Microsoft YaHei'
+                        });
+                        currentY += 0.25;
+                        
+                        for (let k = 0; k < groupPeople.length; k++) {
+                            const p = groupPeople[k];
+                            const col = k % 3;
+                            const row = Math.floor(k / 3);
+                            
+                            const x = 0.4 + col * 1.3;
+                            const y = currentY + row * 0.55;
+                            
+                            if (p.avatarUrl) {
+                                slide.addImage({
+                                    data: p.avatarUrl,
+                                    x: x, y: y, w: 0.36, h: 0.36
+                                });
+                            } else {
+                                const color = getAvatarColor(p.name).replace('#', '');
+                                slide.addShape(pptx.shapes.OVAL, {
+                                    x: x, y: y, w: 0.36, h: 0.36,
+                                    fill: { color: color },
+                                    line: { color: 'ffffff', width: 1 }
+                                });
+                                slide.addText(p.name ? p.name.charAt(0) : '?', {
+                                    x: x, y: y, w: 0.36, h: 0.36,
+                                    align: 'center', valign: 'middle',
+                                    fontSize: 10, bold: true, color: 'ffffff'
+                                });
+                            }
+                            
+                            slide.addText(p.name, {
+                                x: x + 0.4, y: y, w: 0.85, h: 0.18,
+                                fontSize: 8, bold: true, color: '333333', fontFace: 'Microsoft YaHei',
+                                valign: 'middle'
+                            });
+                            
+                            const hospital = p.bio ? p.bio.split(/[，,]/)[0] : '';
+                            slide.addText(hospital || '专家', {
+                                x: x + 0.4, y: y + 0.18, w: 0.85, h: 0.15,
+                                fontSize: 7, color: '666666', fontFace: 'Microsoft YaHei',
+                                valign: 'top'
+                            });
+                        }
+                        
+                        currentY += Math.ceil(groupPeople.length / 3) * 0.55 + 0.1;
+                    }
+                }
 
                 await pptx.writeFile({ fileName: state.meta.title + '_会议海报.pptx' });
             } catch(e) {
@@ -2390,11 +2835,16 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                             { text: '主持', options: { bold: true, color: 'bbdefb', fontSize: 13 } }
                         ]);
                         
-                        state.agenda.forEach(a => {
-                            const speaker = state.people.find(p => p.id === a.speakerId);
-                            const host = state.people.find(p => p.id === a.hostId);
-                            
-                            let speakerName = speaker ? speaker.name : '';
+                        const rowspans = calculateAgendaRowspans();
+                        
+                        state.agenda.forEach((a, index) => {
+                            let speakerName = '';
+                            if (a.speakerId) {
+                                speakerName = a.speakerId.split(',').map(id => {
+                                    const p = state.people.find(x => x.id === id);
+                                    return p ? p.name : '';
+                                }).filter(Boolean).join('、');
+                            }
                             if (a.type === 'discussion' && a.discussantIds && a.discussantIds.length > 0) {
                                 const names = a.discussantIds.map(id => {
                                     const p = state.people.find(x => x.id === id);
@@ -2403,14 +2853,30 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                                 speakerName = names.join('、');
                             }
                             
-                            let hostName = host ? host.name : '';
+                            let hostName = '';
+                            if (a.hostId) {
+                                hostName = a.hostId.split(',').map(id => {
+                                    const p = state.people.find(x => x.id === id);
+                                    return p ? p.name : '';
+                                }).filter(Boolean).join('、');
+                            }
                             
-                            rows.push([
+                            const hostSpan = rowspans[index].host;
+                            
+                            let row = [
                                 { text: a.startTimeStr + ' - ' + a.endTimeStr, options: { bold: true, color: 'ffffff', fontSize: 11 } },
                                 { text: a.title, options: { bold: true, color: 'ffffff', fontSize: 11 } },
-                                { text: speakerName || '--', options: { color: 'ffffff', fontSize: 11 } },
-                                { text: hostName || '--', options: { color: 'ffffff', fontSize: 11 } }
-                            ]);
+                                { text: speakerName || '--', options: { color: 'ffffff', fontSize: 11 } }
+                            ];
+                            
+                            if (hostSpan > 0) {
+                                row.push({ 
+                                    text: hostName || '--', 
+                                    options: { rowspan: hostSpan, color: 'ffffff', fontSize: 11, valign: 'middle' } 
+                                });
+                            }
+                            
+                            rows.push(row);
                         });
                         
                         slide.addTable(rows, {
@@ -2509,7 +2975,10 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                         }
                     }
                     else if (slideObj.type === 'discussion_panel') {
-                        let host = state.people.find(p => p.id === slideObj.hostId);
+                        let hosts = [];
+                        if (slideObj.hostId) {
+                            hosts = slideObj.hostId.split(',').map(id => state.people.find(p => p.id === id)).filter(Boolean);
+                        }
                         let discussants = state.people.filter(p => slideObj.discussantIds.includes(p.id));
                         
                         slide.addText('讨论环节', {
@@ -2517,19 +2986,25 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                             fontSize: 24, bold: true, color: 'ffffff'
                         });
                         
-                        if (host) {
+                        if (hosts.length > 0) {
                             slide.addShape(pptx.shapes.RECTANGLE, {
-                                x: 1.5, y: 1.1, w: 7.0, h: 0.7,
+                                x: 1.5, y: 1.0, w: 7.0, h: 0.8,
                                 fill: { color: 'ffffff', transparency: 80 },
                                 line: { color: 'ffffff', width: 1 }
                             });
-                            slide.addText([
-                                { text: '主持嘉宾：', options: { color: 'bbdefb', bold: true } },
-                                { text: host.name, options: { color: 'ffffff', bold: true } },
-                                { text: '  ' + (host.bio || ''), options: { color: 'ffffff', fontSize: 11 } }
-                            ], {
-                                x: 1.6, y: 1.1, w: 6.8, h: 0.7,
-                                align: 'left', fontSize: 13
+                            
+                            let textObjs = [{ text: '主持嘉宾：', options: { color: 'bbdefb', bold: true } }];
+                            hosts.forEach((h, hIdx) => {
+                                textObjs.push({ text: h.name, options: { color: 'ffffff', bold: true } });
+                                textObjs.push({ text: ' (' + (h.bio ? h.bio.split(/[，,]/)[0] : '') + ')', options: { color: 'ffffff', fontSize: 10 } });
+                                if (hIdx < hosts.length - 1) {
+                                    textObjs.push({ text: '、', options: { color: 'ffffff' } });
+                                }
+                            });
+                            
+                            slide.addText(textObjs, {
+                                x: 1.6, y: 1.0, w: 6.8, h: 0.8,
+                                align: 'left', fontSize: 12
                             });
                         }
                         
@@ -2570,9 +3045,16 @@ posterGradient: 'linear-gradient(180deg, #ffebee 0%, #ffffff 60%, #ffebee 100%)'
                                     x: x + 0.08, y: y + 0.08, w: 0.32, h: 0.32
                                 });
                             } else {
-                                slide.addShape(pptx.shapes.RECTANGLE, {
+                                const color = getAvatarColor(p.name).replace('#', '');
+                                slide.addShape(pptx.shapes.OVAL, {
                                     x: x + 0.08, y: y + 0.08, w: 0.32, h: 0.32,
-                                    fill: { color: 'cccccc' }
+                                    fill: { color: color },
+                                    line: { color: 'ffffff', width: 1 }
+                                });
+                                slide.addText(p.name ? p.name.charAt(0) : '?', {
+                                    x: x + 0.08, y: y + 0.08, w: 0.32, h: 0.32,
+                                    align: 'center', valign: 'middle',
+                                    fontSize: 10, bold: true, color: 'ffffff'
                                 });
                             }
                             
